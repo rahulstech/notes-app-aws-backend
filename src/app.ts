@@ -2,6 +2,7 @@ import type { Express } from 'express'
 import express from 'express'
 import { NoteArrayDataService, installNoteDataService } from './data/index'
 import notesRouter from './router/NotesRouter'
+import { expressErrorHandler, notFoundHandler } from './middleware';
 
 const app: Express = express();
 
@@ -11,14 +12,21 @@ const app: Express = express();
 
 app.use(express.json());
 
-const dataService = new NoteArrayDataService();
-app.use(installNoteDataService(dataService));
+app.use(installNoteDataService(new NoteArrayDataService()));
 
 /////////////////////////////////////////////////
 ///                 Routers                  ///
 ///////////////////////////////////////////////
 
 app.use("/notes", notesRouter);
+
+/////////////////////////////////////////////////
+///              Error Handler               ///
+///////////////////////////////////////////////
+
+app.use(notFoundHandler)
+
+app.use(expressErrorHandler)
 
 
 app.listen(3000, () => {

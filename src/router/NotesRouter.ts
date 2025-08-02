@@ -1,74 +1,46 @@
 import { Router, Request, Response } from "express";
 import { Note } from '../data'
+import { catchError, validate } from "../middleware";
+import { CreateNoteRule, NoteIdParameterRule } from '../validation/NoteRouterValidationRule' 
+import { ApiError } from "../error";
 
 const router = Router();
 
-router.post("/", async (req: Request, res: Response) => {
-    const { global_id, title, content } = req.body;
+router.post("/", validate(CreateNoteRule), catchError(async (req: Request, res: Response) => {
+    const { global_id, title, content } = req.validValue.body;
     const data = new Note(global_id,title, content);
 
     console.log(`create note ${JSON.stringify(req.body)}`);
     const note = await req.noteDataService.createNote(data);
     res.json({
-        code: 201,
-        message: "successful",
-        body: note,
+        note
     });
-})
+}))
 
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", catchError(async (req: Request, res: Response) => {
     const notes = await req.noteDataService.getNotes();
     res.json({
-        code: 200,
-        message: "successful",
-        body: notes,
+        notes
     })
-})
+}))
 
-router.get("/:note_id", async (req: Request, res: Response) => {
-    const { note_id } = req.params
-    if (!note_id) {
-        res.status(400)
-        res.json({
-            code: 400,
-            message: "note_id not provided"
-        })
-        return
-    }
+router.get("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
+    const { note_id } = req.validValue.params
     const note = await req.noteDataService.getNoteById(note_id)
     if (note) {
         res.json({
-            code: 200,
-            message: "successful",
-            body: note
+            note
         })
     } 
     else {
-        res.status(404)
-        res.json({
-            code: 404,
-            message: "not found"
-        })
+        throw new ApiError(404)
     }
-})
+}))
 
-router.delete("/:note_id", async (req: Request, res: Response) => {
-    const { note_id } = req.params;
-    if (!note_id) {
-        res.status(400)
-        res.json({
-            code: 400,
-            message: "no note id"
-        })
-    }
-    else {
-        await req.noteDataService.deleteNote(note_id)
-        res.json({
-            code: 200,
-            message: "successsful",
-            body: `note with id ${note_id} deleted successfully`
-        })
-    }
-})
+router.delete("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
+    const { note_id } = req.validValue.params;
+    await req.noteDataService.deleteNote(note_id)
+    res.sendStatus(200)
+}))
 
 export default router;
