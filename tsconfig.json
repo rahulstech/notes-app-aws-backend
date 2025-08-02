@@ -1,0 +1,70 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Environment Settings
+    // See also https://aka.ms/tsconfig/module
+    
+    // module structure to use in compiled js
+    // Note: when module set to "commonjs" with verbatimModuleSyntax to true then in then in the js file
+    // use commonjs require syntax instead of es module import syntax for module import
+    // same rule goes for exporting too
+    "module": "commonjs", 
+
+    // this option tells the ts compiler that the runtime environment fully supports which es specification.
+    // this helps the compiler to produce js code compatible to the "target" runtime environment
+    "target": "es2022",
+    "types": ["node","express","joi"],
+    // For nodejs:
+    // "lib": ["esnext"],
+    // "types": ["node"],
+    // and npm install -D @types/node
+
+    // Other Outputs
+
+    // map files are useful for debuging. when some error occures in the compiles js file,
+    // the debugger can locate the exact location in the ts file using these map file.
+    // map files has no use during runtime so can be omitted in the production. 
+    "sourceMap": true,
+
+    // declaration file or .d.ts is generated for type defination only. it is useful when developing libraries
+    // "declaration": true,
+    // "declarationMap": true,
+
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Style Options
+    // "noImplicitReturns": true,
+    // "noImplicitOverride": true,
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noFallthroughCasesInSwitch": true,
+    // "noPropertyAccessFromIndexSignature": true,
+
+    // Recommended Options
+    "strict": true,
+    // "jsx": "react-jsx",
+
+    // ts compiler perform "import-ellison" by default, means if any import is only for type information 
+    // then the import will be removed from output js file. but we may not always that, specifically when
+    // the type import has side effect, like during the first import some code is run. to avoid this
+    // the following option is set to true. also for type onyl imports need to add the keyword 'type' like this
+    // import type { Express, Request } from 'express'. This is help ts compiler to better decide which to keep and
+    // which to remove in the compiled js file
+    "verbatimModuleSyntax": false,
+    
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/**.ts"]
+}
