@@ -27,12 +27,14 @@ function convertToAppError(error: Error): AppError {
     if (error instanceof AppError) {
         return error;
     }
+    console.log(error)
     return new AppError(500, { description: error.message, details: [{ explain: error.name}]}, false)
 }
 
 export function expressErrorHandler(error: Error, req: Request, res: Response, next: NextFunction) {
     const appError = convertToAppError(error)
-    console.error(JSON.stringify(error, null, 2))
+    // console.log('error occurred')
+    // console.log(JSON.stringify(appError, null, 2))
     if (appError instanceof ApiError) {
         res.status(appError.httpCode)
         res.json({

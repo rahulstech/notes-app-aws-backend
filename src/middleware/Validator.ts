@@ -31,7 +31,8 @@ export function validate(rule: ValidationRule): RequestHandler {
         let schema: Schema = joi.isSchema(rule) ? rule : createSchemFromObjectRule(rule);
         try {
             const value = await schema.validateAsync(req, { abortEarly: false, stripUnknown: true });
-            req.validValue = value;
+            const oldValidValues = req.validValue || {}
+            req.validValue = { ...oldValidValues, ...value }
             next();
         }
         catch(error) {

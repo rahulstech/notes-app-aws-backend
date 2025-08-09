@@ -1,7 +1,7 @@
-import { Router, Request, Response } from "express";
-import { Note } from '../data'
+import { Router, Request, Response, NextFunction } from "express";
+import { MediaPutUrlOutput, Note } from '../service'
 import { catchError, validate } from "../middleware";
-import { CreateNoteRule, NoteIdParameterRule } from '../validation/NoteRouterValidationRule' 
+import { CreateNoteRule, MediaMetaRule, NoteIdParameterRule } from '../validation/NoteRouterValidationRule' 
 import { ApiError } from "../error";
 
 const router = Router();
@@ -24,7 +24,9 @@ router.get("/", catchError(async (req: Request, res: Response) => {
     })
 }))
 
-router.get("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
+router.route('/:note_id')
+.all(validate(NoteIdParameterRule))
+.get(catchError(async (req: Request, res: Response) => {
     const { note_id } = req.validValue.params
     const note = await req.noteDataService.getNoteById(note_id,"GUEST")
     if (note) {
@@ -36,11 +38,27 @@ router.get("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Re
         throw new ApiError(404)
     }
 }))
-
-router.delete("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
+.delete(catchError(async (req: Request, res: Response) => {
     const { note_id } = req.validValue.params;
     await req.noteDataService.deleteNote(note_id,"GUEST")
     res.sendStatus(200)
+}))
+
+router.post('/:note_id/media_urls', validate(NoteIdParameterRule), validate(MediaMetaRule), 
+catchError(async (req: Request, res: Response) => {
+    const { note_id } = req.validValue.params
+    const { media_metas } = req.validValue.body
+    const promises: Promise<MediaPutUrlOutput>[] = []
+    media_metas.forEach( (meta: any) => {
+        const media_key = `medias/${note_id}/${Date.now()}`
+        const options = { ...meta, media_key }
+        promises.push(req.noteObjectService.getMediaPutUrl(options))
+    });
+
+    const outputs: MediaPutUrlOutput[] = await Promise.all(promises)
+    res.json({
+        urls: outputs
+    })
 }))
 
 export default router;
