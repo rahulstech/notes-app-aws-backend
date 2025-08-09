@@ -3,6 +3,7 @@ export default class Note {
         public global_id: string,
         public title: string,
         public content: string,
-        public id: string = "",
+        public user_id: string = "GUEST",
+        public note_id: string = "",
     ) {}
 }

@@ -18,7 +18,7 @@ router.post("/", validate(CreateNoteRule), catchError(async (req: Request, res: 
 }))
 
 router.get("/", catchError(async (req: Request, res: Response) => {
-    const notes = await req.noteDataService.getNotes();
+    const notes = await req.noteDataService.getNotes("GUEST");
     res.json({
         notes
     })
@@ -26,7 +26,7 @@ router.get("/", catchError(async (req: Request, res: Response) => {
 
 router.get("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
     const { note_id } = req.validValue.params
-    const note = await req.noteDataService.getNoteById(note_id)
+    const note = await req.noteDataService.getNoteById(note_id,"GUEST")
     if (note) {
         res.json({
             note
@@ -39,7 +39,7 @@ router.get("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Re
 
 router.delete("/:note_id", validate(NoteIdParameterRule), catchError(async (req: Request, res: Response) => {
     const { note_id } = req.validValue.params;
-    await req.noteDataService.deleteNote(note_id)
+    await req.noteDataService.deleteNote(note_id,"GUEST")
     res.sendStatus(200)
 }))
 

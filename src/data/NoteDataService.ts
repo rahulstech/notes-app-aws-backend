@@ -4,10 +4,10 @@ export default interface NoteDataService {
 
     createNote(note: Note): Promise<Note>
 
-    getNotes(): Promise<Note[]>
+    getNotes(user_id: String): Promise<Note[]>
 
-    getNoteById(id: string): Promise<Note | null>
+    getNoteById(note_id: string, user_id: string): Promise<Note | null>
 
-    deleteNote(id: string): Promise<void>
+    deleteNote( note_id: string, user_id: string): Promise<void>
 }
 

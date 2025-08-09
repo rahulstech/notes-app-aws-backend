@@ -20,6 +20,8 @@
   "homepage": "https://github.com/rahulstech/notes-app-aws-backend#readme",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.859.0",
+    "@aws-sdk/util-dynamodb": "^3.859.0",
     "express": "^5.1.0",
     "joi": "^17.13.3"
   },
