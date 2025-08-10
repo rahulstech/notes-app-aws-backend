@@ -1,4 +1,5 @@
 import type Note from './model/Note'
+import type { NoteMedia } from './model/Note'
 
 export default interface NoteDataService { 
 
@@ -8,6 +9,8 @@ export default interface NoteDataService {
 
     getNoteById(note_id: string, user_id: string): Promise<Note | null>
 
-    deleteNote( note_id: string, user_id: string): Promise<void>
+    deleteNote(note_id: string, user_id: string): Promise<void>
+
+    setNoteMedias(note_id: string, user_id: string, medias: NoteMedia[]): Promise<void>
 }
 
