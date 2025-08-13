@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { MediaUploadUrl, Note } from '../service'
+import { MediaUploadOutput, Note } from '../service'
 import { catchError, validate } from "../middleware";
 import { CreateNoteRule, MediaMetaRule, NoteIdParameterRule } from '../validation/NoteRouterValidationRule' 
 import { ApiError } from "../error";
@@ -42,18 +42,18 @@ router.route('/:note_id')
     res.sendStatus(200)
 }))
 
-router.post('/:note_id/media_urls', validate(NoteIdParameterRule), validate(MediaMetaRule), 
+router.post('/:note_id/upload_medias', validate(NoteIdParameterRule), validate(MediaMetaRule), 
 catchError(async (req: Request, res: Response) => {
     const { note_id } = req.validValue.params
     const { media_metas } = req.validValue.body
 
     // TODO: check first if the note exists
 
-    const promises: Promise<MediaUploadUrl>[] = []
-    media_metas.forEach( (meta: any) => {
-        const { media_type, media_size } = meta
-        const options = { user_id: "GUEST", note_id, media_type, media_size }
-        promises.push(req.noteObjectService.getMediaUploadUrl(options))
+    const promises: Promise<MediaUploadOutput>[] = []
+    media_metas.forEach( (meta: Record<string,any>) => {
+        const { id, mime_type, size } = meta
+        const options = { id, user_id: "GUEST", note_id, mime_type, size }
+        promises.push(req.noteObjectService.uploadMedia(options))
     });
 
     const outputs = await Promise.all(promises)

@@ -1,4 +1,4 @@
-import { DeleteMessageBatchCommand, DeleteMessageBatchRequestEntry, Message, ReceiveMessageCommand, SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
+import { DeleteMessageBatchCommand, Message, ReceiveMessageCommand, SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { randomUUID } from "node:crypto";
 import NoteQueueService from "../NoteQueueService";
 import QueueMessage, { QueueMessageEventType, QueueMessageSourceType } from "../model/QueueMessage";
@@ -35,15 +35,17 @@ export default class NoteSQSQueueService implements NoteQueueService {
     public async enqueueMessage(message: QueueMessage): Promise<void> {
         const { source_type, event_type, body } = message
         const MessageBody = JSON.stringify({
-            event_type: QueueMessageEventType[event_type], body
+            event_type, body
         })
         const cmd = new SendMessageCommand({
             QueueUrl: this.queueUrl,
             MessageBody,
+
+            // message attributes are the user defined attributes for the message
             MessageAttributes: {
                 source_type: {
                     DataType: "String",
-                    StringValue: QueueMessageSourceType[source_type]
+                    StringValue: source_type
                 }
             }
         })
@@ -55,7 +57,11 @@ export default class NoteSQSQueueService implements NoteQueueService {
         const cmd = new ReceiveMessageCommand({
             QueueUrl: this.queueUrl,
             WaitTimeSeconds: this.pollSeconds,
-            MaxNumberOfMessages: 10
+            MaxNumberOfMessages: 10,
+
+            // without explicitly mentioning this property the message attributes will not be returned even if exists.
+            // All is a keyword which means i need all the attributes. otherwise i can request message attributes by name.
+            MessageAttributeNames: ['All'] 
         })
 
         const { Messages } = await this.client.send(cmd)
@@ -69,6 +75,7 @@ export default class NoteSQSQueueService implements NoteQueueService {
 
     private createQueueMessage(message: Message): QueueMessage {
         const { Body, MessageAttributes, ReceiptHandle } = message
+
         const source_type = MessageAttributes?.source_type ? QueueMessageSourceType.NOTE_SERVICE : QueueMessageSourceType.S3
         if (source_type == QueueMessageSourceType.S3) {
             const { Records } = JSON.parse(Body!)

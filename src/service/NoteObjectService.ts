@@ -1,23 +1,42 @@
-import MediaObjectEntry from "./model/MediaObjectEntry"
-
-export interface MediaUploadUrlOptions {
+export interface MediaUploadOptions {
+    id: string,
     user_id: string,
     note_id: string,
-    media_type: string,
-    media_size: number
+    mime_type: string,
+    size: number
 }
 
-export interface MediaUploadUrl {
-    url: string
-    method: string,
+export interface MediaUpload {
+    url: string,
+    http_method: string,
     expires: number,
-    expires_in: number
+    expires_in: number,
 }
 
+export interface MediaResource {
+    url: string,
+    key: string,
+}
+
+export interface MediaUploadOutput {
+    id: string,
+    upload: MediaUpload,
+    resource: MediaResource,
+}
+
+export interface MediaObject {
+    key: string,
+    mime_type: string,
+    size: number,
+}
 
 export default interface NoteObjectService {
 
-    getMediaUploadUrl(options: MediaUploadUrlOptions): Promise<MediaUploadUrl>
+    uploadMedia(options: MediaUploadOptions): Promise<MediaUploadOutput>
 
-    getMediaMeta(key: string): Promise<MediaObjectEntry>
+    getMediaMeta(key: string): Promise<MediaObject>
+
+    getMediaUrl(key: string): string
+
+    deleteMultipleMedias(keys: string[]): Promise<void>
 }

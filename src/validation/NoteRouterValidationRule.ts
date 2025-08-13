@@ -21,8 +21,9 @@ export const MediaMetaRule = joi.object().keys({
     body: joi.object().keys({
         media_metas: joi.array().items(
             joi.object().keys({
-                media_type: joi.string().required(),
-                media_size: joi.number().required()
+                id: joi.string().required(),
+                mime_type: joi.string().required(),
+                size: joi.number().required()
             })
         )
         .min(1)
