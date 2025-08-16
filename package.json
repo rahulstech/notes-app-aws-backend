@@ -6,8 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/app.js",
-    "dev-note-service": "ts-node-dev --env-file=.env --respawn src/app-note.ts",
-    "dev-queue-service": "ts-node-dev --env-file=.env --respawn src/app-queue.ts"
+    "dev-note-service": "ts-node-dev --env-file=.env --respawn src/app-note.ts"
   },
   "repository": {
     "type": "git",
@@ -23,7 +22,6 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.859.0",
     "@aws-sdk/client-s3": "^3.864.0",
-    "@aws-sdk/client-sqs": "^3.864.0",
     "@aws-sdk/s3-request-presigner": "^3.864.0",
     "@aws-sdk/util-dynamodb": "^3.859.0",
     "express": "^5.1.0",

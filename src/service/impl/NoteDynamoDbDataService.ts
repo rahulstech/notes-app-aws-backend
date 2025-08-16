@@ -1,33 +1,45 @@
 import { DeleteItemCommand, DynamoDBClient, 
     GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
-import Note, { NoteMedia } from "../model/Note";
+import Note, { CreateNoteInput, NoteMedia, NoteMediaInput, UpdateNoteInput } from "../model/Note";
 import NoteDataService from "../NoteDataService";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
-import NoteQueueService from "../NoteQueueService";
-import QueueMessage, { QueueMessageEventType, QueueMessageSourceType } from "../model/QueueMessage";
+import { randomUUID } from "node:crypto";
+import NoteObjectService from "../NoteObjectService";
 
 
 const TABLE_USER_NOTES = "user_notes"
+const MAX_ALLOWED_MEDIAS_PER_NOTE = process.env.MAX_ALLOWED_MEDIAS_PER_NOTE ? Number(process.env.MAX_ALLOWED_MEDIAS_PER_NOTE) : 0
+
 
 export interface DynamoDBClientOptions {
-    
+    objectService: NoteObjectService,
 }
 
 export default class NoteDynamoDbDataService implements NoteDataService {
 
-    private queueService: NoteQueueService
+    private objectService: NoteObjectService
     private client: DynamoDBClient
 
-    constructor(queuService: NoteQueueService, options?: DynamoDBClientOptions) {
-        this.queueService = queuService
+    constructor(options: DynamoDBClientOptions) {
+        this.objectService = options.objectService
         const client = new DynamoDBClient({
             endpoint: 'http://localhost:8000'
         })
         this.client = client
     }
 
-    public async createNote(note: Note): Promise<Note> {
-        note.note_id = Date.now().toString()
+    public async createNote(input: CreateNoteInput): Promise<Note> {
+        const { user_id, global_id, title, content, medias } = input
+        const note_id = randomUUID()
+        const note = new Note(global_id, title, content, user_id)
+        note.note_id = note_id
+        if (medias && medias.length > 0) {
+            const note_medias: Record<string,NoteMedia> = Object.fromEntries(medias.map( media => {
+                const note_media: NoteMedia = this.createNoteMedia(note.user_id, note_id, media)
+                return [note_media.key,note_media]
+            }))
+            note.medias = note_medias
+        }
         const noteItem = note.toDBItem()
         const Item = marshall({...noteItem })
         const cmd = new PutItemCommand({
@@ -84,38 +96,81 @@ export default class NoteDynamoDbDataService implements NoteDataService {
 
         const { Attributes } = await this.client.send(cmd)
         if (Attributes) {
-            const item = unmarshall(Attributes)
-            const deletedNote = Note.fromDBItem(item)
-            await this.enqueuDeleteNoteMediasMessage(deletedNote)
+            const deletedNote = Note.fromDBItem(unmarshall(Attributes))
+            const keys = deletedNote.medias ? Object.keys(deletedNote.medias) : []
+            await this.objectService.deleteMultipleMedias(keys)
         }
     }
 
-    private async enqueuDeleteNoteMediasMessage(deletedNote: Note): Promise<void> {
-        const { medias } = deletedNote
-        const keys: string[] = medias ? Object.keys(medias) : []
-        if (keys.length == 0) {
-            return
-        }
-        const message: QueueMessage = {
-            source_type: QueueMessageSourceType.NOTE_SERVICE,
-            event_type: QueueMessageEventType.DELETE_NOTE,
-            body: { keys }
-        }
-        await this.queueService.enqueueMessage(message)
-    }
+    public async updateNote(input: UpdateNoteInput): Promise<Note> {
+        const { user_id, note_id, title, content, add_medias, remove_medias } = input
+        const removecount = remove_medias?.length || 0
+        const addcount = add_medias?.length || 0  
 
-    public async setNoteMedias(note_id: string, user_id: string, medias: NoteMedia[]): Promise<void> {
-        const expression = medias.map((_,index) => `medias.#key${index} = :value${index}`).join(", ")
-        const expressionnames = Object.fromEntries(medias.map(({key},index) => [`#key${index}`, key]))
-        const expressionvalues = Object.fromEntries(medias.map((media,index) => [`:value${index}`, media]))
+        const SetExpressions: string[] = []
+        const RemoveExpressions: string[] = []
+        const AttributeNames: Record<string,string> = {}
+        const AttributeValues: Record<string,any> = {}
+        if (title) {
+            SetExpressions.push("title = :title")
+            AttributeValues[":title"] = title
+        }
+        if (content) {
+            SetExpressions.push("content = :content")
+            AttributeValues[":content"] = content
+        }
+        if (addcount > 0) {
+            add_medias?.forEach( (media_intput,index) => {
+                const note_media: NoteMedia = this.createNoteMedia(user_id, note_id, media_intput)
+                const keyname = `#addkey${index}`
+                const valuename = `:media${index}`
+                SetExpressions.push(`medias.${keyname} = ${valuename}`)
+                AttributeNames[keyname] = note_media.key
+                AttributeValues[valuename] = note_media
+            })
+        }
+        if (removecount > 0) {
+            remove_medias?.forEach((media_key, index) => {
+                const keyname = `#removekey${index}`
+                RemoveExpressions.push(`medias.${keyname}`)
+                AttributeNames[keyname] = media_key
+            })
+        }
+
+        let UpdateExpression = ""
+        if (SetExpressions.length > 0) {
+            UpdateExpression += `SET ${SetExpressions.join(",")}`
+        }
+        if (RemoveExpressions.length > 0) {
+            UpdateExpression += ` REMOVE ${RemoveExpressions.join(",")}`
+        }
+
         const cmd = new UpdateItemCommand({
             TableName: TABLE_USER_NOTES,
             Key: marshall({ user_id, note_id }),
-            UpdateExpression: `SET ${expression}`,
-            ExpressionAttributeValues: marshall(expressionvalues),
-            ExpressionAttributeNames: expressionnames
+            UpdateExpression,
+            ConditionExpression: "size(medias) <= :permitcount",
+            ExpressionAttributeNames: AttributeNames,
+            ExpressionAttributeValues: marshall({
+                ...AttributeValues,
+                ":permitcount": MAX_ALLOWED_MEDIAS_PER_NOTE + removecount - addcount,
+            }),
+            ReturnValues: 'ALL_NEW'
         })
 
-        await this.client.send(cmd)
+        const { Attributes } = await this.client.send(cmd)
+
+        if (removecount > 0) {
+            await this.objectService.deleteMultipleMedias(remove_medias!)
+        }
+
+        return Note.fromDBItem(unmarshall(Attributes!))
+    }
+
+    private createNoteMedia(user_id: string, note_id: string, input: NoteMediaInput): NoteMedia {
+        const key = this.objectService.createMediaObjectKey(user_id, note_id)
+        const url = this.objectService.getMediaUrl(key)
+        const note_media: NoteMedia = { ...input, url, key }
+        return note_media
     }
 }

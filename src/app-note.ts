@@ -2,7 +2,7 @@ import type { Express } from 'express'
 import express from 'express'
 import notesRouter from './router/NotesRouter'
 import { expressErrorHandler, installNoteDataService, notFoundHandler } from './middleware';
-import { installNoteObjectService, installNoteQueueService } from './middleware/Services';
+import { installNoteObjectService } from './middleware/Services';
 
 const app: Express = express();
 
@@ -12,7 +12,6 @@ const app: Express = express();
 
 app.use(express.json());
 
-app.use(installNoteQueueService())
 app.use(installNoteObjectService())
 app.use(installNoteDataService())
 

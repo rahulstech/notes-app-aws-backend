@@ -1,15 +1,14 @@
 import { Router, Request, Response } from "express";
-import { MediaUploadOutput, Note } from '../service'
+import { MediaUploadUrlInput, MediaUploadUrlOutput, CreateNoteInput, UpdateNoteInput } from '../service'
 import { catchError, validate } from "../middleware";
-import { CreateNoteRule, MediaMetaRule, NoteIdParameterRule } from '../validation/NoteRouterValidationRule' 
+import { CreateNoteRule, NoteIdParameterRule, NoteMediasRule, UpdateNoteRule } from '../validation/NoteRouterValidationRule' 
 import { ApiError } from "../error";
 
 const router = Router();
 
 router.post("/", validate(CreateNoteRule), catchError(async (req: Request, res: Response) => {
-    const { global_id, title, content } = req.validValue.body;
-    const data = new Note(global_id,title, content);
-    const note = await req.noteDataService.createNote(data);
+    const input: CreateNoteInput = { user_id: "GUEST", ...(req.validValue.body) }
+    const note = await req.noteDataService.createNote(input);
     res.json({
         note
     });
@@ -41,24 +40,25 @@ router.route('/:note_id')
     await req.noteDataService.deleteNote(note_id,"GUEST")
     res.sendStatus(200)
 }))
+.patch(
+    validate(UpdateNoteRule),
+    catchError(async (req: Request, res: Response) => {
+        const { note_id } = req.validValue.params
+        const input: UpdateNoteInput = { ...(req.validValue.body), note_id, user_id: "GUEST" }
+        const note = await req.noteDataService.updateNote(input)
+        res.json({
+            note
+        })
+}))
 
-router.post('/:note_id/upload_medias', validate(NoteIdParameterRule), validate(MediaMetaRule), 
-catchError(async (req: Request, res: Response) => {
-    const { note_id } = req.validValue.params
-    const { media_metas } = req.validValue.body
 
-    // TODO: check first if the note exists
-
-    const promises: Promise<MediaUploadOutput>[] = []
-    media_metas.forEach( (meta: Record<string,any>) => {
-        const { id, mime_type, size } = meta
-        const options = { id, user_id: "GUEST", note_id, mime_type, size }
-        promises.push(req.noteObjectService.uploadMedia(options))
-    });
-
-    const outputs = await Promise.all(promises)
+router.post("/media_upload_urls",validate(NoteMediasRule), catchError(async (req: Request, res: Response) => {
+    const { medias } = req.validValue.body
+    const promises: Promise<MediaUploadUrlOutput>[] = medias
+                                                    .map((media: MediaUploadUrlInput) => req.noteObjectService.getMediaUploadUrl(media))
+    const urls = await Promise.all(promises)
     res.json({
-        urls: outputs
+        urls
     })
 }))
 

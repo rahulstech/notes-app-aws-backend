@@ -1,4 +1,4 @@
-import NoteObjectService, { MediaObject, MediaUploadOptions, MediaUploadOutput } from "../NoteObjectService";
+import NoteObjectService, { MediaObject, MediaUploadUrlInput, MediaUploadUrlOutput } from "../NoteObjectService";
 import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { randomUUID } from "node:crypto";
@@ -33,9 +33,8 @@ export default class NoteS3ObjectService implements NoteObjectService {
         })
     }
 
-    public async uploadMedia(options: MediaUploadOptions): Promise<MediaUploadOutput> {
-        const { id, user_id, note_id, mime_type, size } = options 
-        const Key = this.createMediaObjectKey(user_id,note_id)
+    public async getMediaUploadUrl(input: MediaUploadUrlInput): Promise<MediaUploadUrlOutput> {
+        const { id, key: Key, mime_type, size } = input
         const Expires = new Date(Date.now() + PRESIGNED_URL_EXPIRES_IN_MILLIS)
         const cmd = new PutObjectCommand({
             Bucket: this.bucket,
@@ -45,24 +44,10 @@ export default class NoteS3ObjectService implements NoteObjectService {
             // Expires
         })
         const upload_url = await getSignedUrl(this.client, cmd)
-        const resource_url = this.getMediaUrl(Key)
-        const output: MediaUploadOutput = {
-            id,
-            upload: {
-                url: upload_url,
-                http_method: 'PUT',
-                expires: Expires.getTime(),
-                expires_in: PRESIGNED_URL_EXPIRES_IN
-            },
-            resource: {
-                url: resource_url,
-                key: Key,
-            }
-        }
-        return output
+        return { id, upload_url, upload_http_method: 'PUT', expire: Expires.getTime(), expires_in: PRESIGNED_URL_EXPIRES_IN_MILLIS }
     }
 
-    private createMediaObjectKey(user_id: string, note_id: string): string {
+    public createMediaObjectKey(user_id: string, note_id: string): string {
         return `medias/${user_id}/${note_id}/${randomUUID()}`
     }
 

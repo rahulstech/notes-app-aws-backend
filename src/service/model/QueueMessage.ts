@@ -5,7 +5,7 @@ export enum QueueMessageSourceType {
 
 export enum QueueMessageEventType {
     CREATE_OBJECT = "CREATE_OBJECT",
-    DELETE_NOTE = "DELETE_NOTE",
+    DELETE_MEDIAS = "DELETE_MEDIAS",
 }
 
 export default interface QueueMessage {

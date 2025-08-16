@@ -1,8 +1,33 @@
+export interface NoteMediaInput {
+    global_id: string,
+    type: string,
+    size: number,
+}
+
 export interface NoteMedia {
     url: string,
     key: string,
     type: string,
-    size: number
+    size: number,
+    global_id: string,
+}
+
+export interface CreateNoteInput {
+    user_id: string,
+    global_id: string,
+    title: string,
+    content: string,
+    medias?: NoteMediaInput[],
+    note_id?: string
+}
+
+export interface UpdateNoteInput {
+    user_id: string,
+    note_id: string
+    title?: string,
+    content?: string,
+    add_medias?: NoteMediaInput[],
+    remove_medias?: string[]
 }
 
 export default class Note {
