@@ -1,5 +1,5 @@
 import type Note from './model/Note'
-import type { CreateNoteInput, NoteMedia, UpdateNoteInput } from './model/Note'
+import type { CreateNoteInput, NoteMediaStatus, UpdateNoteInput } from './model/Note'
 
 export default interface NoteDataService { 
 
@@ -12,5 +12,7 @@ export default interface NoteDataService {
     deleteNote(note_id: string, user_id: string): Promise<void>
 
     updateNote(input: UpdateNoteInput): Promise<Note>
+
+    updateMediaStatus(note_id: string, user_id: string, key_status: Record<string,NoteMediaStatus>): Promise<void>
 }
 

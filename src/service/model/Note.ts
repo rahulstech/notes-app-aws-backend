@@ -4,12 +4,18 @@ export interface NoteMediaInput {
     size: number,
 }
 
+export enum NoteMediaStatus {
+    AVAILABLE = "AVAILABLE",
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+}
+
 export interface NoteMedia {
     url: string,
     key: string,
     type: string,
     size: number,
     global_id: string,
+    status: NoteMediaStatus,
 }
 
 export interface CreateNoteInput {

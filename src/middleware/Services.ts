@@ -1,12 +1,15 @@
 import { NextFunction, Request, RequestHandler, Response } from "express";
 import { NoteDynamoDbDataService, NoteDataService, NoteObjectService,
-     NoteS3ObjectService, DynamoDBClientOptions } from "../service";
+     NoteS3ObjectService, DynamoDBClientOptions, 
+     SQSClientOptions,NoteSQSQueueService, NoteQueueService
+    } from "../service";
 
 declare global {
     namespace Express {
         interface Request {
             noteDataService: NoteDataService,
             noteObjectService: NoteObjectService,
+            noteQueueService: NoteQueueService
         }
     }
 }
@@ -18,9 +21,9 @@ const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 
 export function installNoteDataService(): RequestHandler {
     return (req: Request, res: Response, next: NextFunction) => {
-        const { noteObjectService: objectService } = req
+        const { noteObjectService: objectService, noteQueueService: queueService } = req
         const options: DynamoDBClientOptions = {
-            objectService
+            objectService, queueService
         }
         req.noteDataService = new NoteDynamoDbDataService(options)
         next()
@@ -37,6 +40,19 @@ export function installNoteObjectService(): RequestHandler {
             mediaBaseUrl: MEDIA_CDN_URL_PREFIX || ''
         }
         req.noteObjectService = new NoteS3ObjectService(options)
+        next()
+    }
+}
+
+export function installNoteQueueService(): RequestHandler {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const options: SQSClientOptions = {
+            region: SQS_REGION || '',
+            accessKeyId: AWS_ACCESS_KEY_ID || '',
+            secretAccessKey: AWS_SECRET_ACCESS_KEY || '',
+            queueUrl: SQS_URL || ''
+        }
+        req.noteQueueService = new NoteSQSQueueService(options)
         next()
     }
 }
