@@ -1,0 +1,23 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "baseUrl": ".",
+    "rootDir": ".",
+    "module": "commonjs",
+    "target": "es2022",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "paths": {
+      "@notes-app/common": ["common/src/index.ts"],
+      "@notes-app/database-service": ["services/database/src/index.ts"],
+      "@notes-app/queue-service": ["services/queue/src/index.ts"],
+      "@notes-app/storage-service": ["services/storage/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

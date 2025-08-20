@@ -1,0 +1,21 @@
+{
+  "name": "@notes-app/queue-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "services/queue/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/services/queue",
+        "main": "services/queue/src/index.ts",
+        "tsConfig": "services/queue/tsconfig.lib.json",
+        "assets": ["services/queue/*.md"],
+        "format": ["cjs"],
+        "generatePackageJson": true
+      }
+    }
+  },
+  "tags": []
+}
