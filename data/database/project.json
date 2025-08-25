@@ -1,0 +1,21 @@
+{
+  "name": "@notes-app/database-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "data/database/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/data/database",
+        "main": "data/database/src/index.ts",
+        "tsConfig": "data/database/tsconfig.lib.json",
+        "assets": ["data/database/*.md"],
+        "format": ["cjs"],
+        "generatePackageJson": false
+      }
+    }
+  }
+}

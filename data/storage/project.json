@@ -1,0 +1,21 @@
+{
+  "name": "@notes-app/storage-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "data/storage/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/data/storage",
+        "main": "data/storage/src/index.ts",
+        "tsConfig": "data/storage/tsconfig.lib.json",
+        "assets": ["data/storage/*.md"],
+        "format": ["cjs"],
+        "generatePackageJson": false
+      }
+    }
+  }
+}

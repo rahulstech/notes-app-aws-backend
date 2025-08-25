@@ -1,0 +1,21 @@
+{
+  "name": "@note-app/note-repository",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "domain/note-repository/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/domain/note-repository",
+        "main": "domain/note-repository/src/index.ts",
+        "tsConfig": "domain/note-repository/tsconfig.lib.json",
+        "assets": ["domain/note-repository/*.md"],
+        "format": ["cjs"],
+        "generatePackageJson": false
+      }
+    }
+  }
+}

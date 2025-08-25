@@ -1,12 +1,12 @@
 {
     "TableName": "user_notes",
     "KeySchema": [
-        { "AttributeName": "user_id", "KeyType": "HASH"},
-        { "AttributeName": "note_id", "KeyType": "RANGE"}
+        { "AttributeName": "PK", "KeyType": "HASH"},
+        { "AttributeName": "SK", "KeyType": "RANGE"}
     ],
     "AttributeDefinitions": [
-        {"AttributeName": "user_id","AttributeType": "S"},
-        {"AttributeName": "note_id", "AttributeType": "S"}
+        {"AttributeName": "PK","AttributeType": "S"},
+        {"AttributeName": "SK", "AttributeType": "S"}
     ],
     "BillingMode": "PAY_PER_REQUEST"
 }

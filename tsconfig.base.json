@@ -13,10 +13,11 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "paths": {
+      "@note-app/note-repository": ["domain/note-repository/src/index.ts"],
       "@notes-app/common": ["common/src/index.ts"],
-      "@notes-app/database-service": ["services/database/src/index.ts"],
-      "@notes-app/queue-service": ["services/queue/src/index.ts"],
-      "@notes-app/storage-service": ["services/storage/src/index.ts"]
+      "@notes-app/database-service": ["data/database/src/index.ts"],
+      "@notes-app/queue-service": ["data/queue/src/index.ts"],
+      "@notes-app/storage-service": ["data/storage/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

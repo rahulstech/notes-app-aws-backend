@@ -6,8 +6,8 @@
   "scripts": {
     "build": "nx build",
     "start": "node dist/app.js",
-    "dev-note-service": "node --env-file=.env dist/apps/note-service/main.js",
-    "dev-queue-service": "node --env-file=.env dist/apps/queue-service/main.js"
+    "dev:note-service": "nx build note-service && node --env-file=.env dist/microservices/note-service/main.js",
+    "dev:queue-service": "node --env-file=.env dist/microservices/queue-service/main.js"
   },
   "repository": {
     "type": "git",
@@ -21,6 +21,13 @@
   "homepage": "https://github.com/rahulstech/notes-app-aws-backend#readme",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.873.0",
+    "@aws-sdk/client-s3": "^3.873.0",
+    "@aws-sdk/client-sqs": "^3.873.0",
+    "@aws-sdk/s3-request-presigner": "^3.873.0",
+    "@aws-sdk/util-dynamodb": "^3.873.0",
+    "express": "^5.1.0",
+    "joi": "^18.0.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
@@ -33,6 +40,9 @@
     "@swc-node/register": "~1.9.1",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
+    "@types/express": "^5.0.3",
+    "@types/joi": "^17.2.2",
+    "@types/node": "18.16.9",
     "esbuild": "^0.19.2",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
