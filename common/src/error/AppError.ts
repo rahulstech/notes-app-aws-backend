@@ -2,8 +2,8 @@ import { STATUS_CODES } from "node:http";
 import { createAppErrorItem } from "../util/helpers";
 
 export interface AppErrorItem {
-    description: string,
-    context?: string,
+    description: string | Record<string,any>;
+    context?: string;
 }
 
 export class AppError extends Error {
@@ -18,8 +18,13 @@ export class AppError extends Error {
         this.name = this.constructor.name;
     }
 
-    public appendDetails(item: AppErrorItem) {
-        this.details.push(item)
+    public appendDetails(item: AppErrorItem | AppErrorItem[]) {
+        if (Array.isArray(item)) {
+            this.details = this.details.concat(item)
+        }
+        else {
+            this.details.push(item)
+        }
     }
 }
 

@@ -20,11 +20,11 @@ export interface NoteDataService {
 
   updateMultipleNotes(PK: string, inputs: UpdateNoteDataInput[]): Promise<UpdateNoteDataOutput>;
 
-  updateMediaStatus(
-    PK: string,
-    SK: string,
-    key_status: Record<string, NoteMediaStatus>
-  ): Promise<void>;
+  updateMediaStatus(PK: string,SK: string,items: Pick<NoteMediaItem,'global_id'|'key'|'status'>[]): Promise<void>;
+
+  addNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]>
+
+  removeNoteMedias(PK: string, SK: string, keyGids: Pick<NoteMediaItem,'global_id'|'key'>[]): Promise<string[]>
 
   deleteMultipleNotes(PK: string, SKs: string[]): Promise<string[]>;
 

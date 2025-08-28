@@ -15,11 +15,12 @@ export class NoteItem {
     public short_content: string,
     public timestamp_created: number,
     public timestamp_modified: number,
-    public medias?: Record<string, NoteMediaItem>
+    public medias?: Record<string, NoteMediaItem>,
+    public mgids?: Record<string,string | null>
   ) {}
 
   public toPublicRecord(short: boolean = false): Record<string,any> {
-    const note: Record<string, any> = pickExcept(this,["PK","medias","content"]);
+    const note: Record<string, any> = pickExcept(this,["PK","medias","content","mgids"]);
     if (!short) {
       note.content = this.content;
       note.medias = Object.values(this.medias || {});
@@ -30,7 +31,8 @@ export class NoteItem {
   public toDBItem(): Record<string, any> {
     const Item: Record<string, any> = { ...this };
     if (!this.medias) {
-      Item.medias = {};
+      Item.medias = {}
+      Item.mgids = {}
     }
     return marshall(Item);
   }
@@ -46,7 +48,8 @@ export class NoteItem {
       item.short_content,
       item.timestamp_created,
       item.timestamp_modified,
-      item.medias
+      item.medias,
+      item.mgids
     );
   }
 
@@ -58,4 +61,4 @@ export class NoteItem {
   }
 }
 
-export const NOTE_ITEM_PROJECTIONS = ['PK','SK','title','content','short_content','timestamp_created','timestamp_modified','medias']
+export const NOTE_ITEM_PROJECTIONS = ['PK','SK','title','content','short_content','timestamp_created','timestamp_modified','medias','mgids']

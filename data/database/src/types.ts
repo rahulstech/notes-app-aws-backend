@@ -1,10 +1,6 @@
 import { NoteItem } from './model/Note';
 import { AppError } from '@notes-app/common'
 
-export interface DynamoDBClientOptions {
-  maxMediasPerItem: number
-}
-
 export type ShortNoteItem = Omit<InstanceType<typeof NoteItem>, "medias"|"content">
 
 export enum NoteMediaStatus {
@@ -31,8 +27,6 @@ export interface UpdateNoteDataInput {
   title?: string;
   content?: string;
   timestamp_modified: number;
-  add_medias?: NoteMediaItem[];
-  remove_medias?: string[];
 }
 
 export interface UpdateNoteDataOutput {

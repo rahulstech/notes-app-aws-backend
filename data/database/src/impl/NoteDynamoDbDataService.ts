@@ -13,22 +13,26 @@ import { NoteDataService } from '../NoteDataService';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
   CreateNoteDataOutput,
-  DynamoDBClientOptions,
   NoteMediaItem,
-  NoteMediaStatus,
   ShortNoteItem,
   UpdateNoteDataInput,
   UpdateNoteDataOutput,
-  UserNotesPrimaryKey,
 } from '../types';
 import { randomUUID } from 'crypto';
-import { string } from 'joi';
-import { AppError, AppErrorBuilder, newAppErrorBuilder, pickExcept } from '@notes-app/common';
+import { pickExcept } from '@notes-app/common';
 
 const TABLE_USER_NOTES = 'user_notes';
 const NOTE_ID_PREFIX = 'NID';
 const SK_NGID_NID_MAP = "_NGID_NID_MAP_"
 const ATTRIBUTE_NGIDS_MAP = "ngids"
+
+type PartialNoteMediaItem = Partial<NoteMediaItem>
+
+type PartialNoteItem = Partial<Omit<InstanceType<typeof NoteItem>,'medias'>> & { medias?: Record<string,PartialNoteMediaItem> }
+
+export interface DynamoDBClientOptions {
+  maxMediasPerItem: number
+}
 
 export class NoteDynamoDbDataService implements NoteDataService {
   private client: DynamoDBClient;
@@ -185,30 +189,38 @@ export class NoteDynamoDbDataService implements NoteDataService {
       return `medias.${keyname}`
     }).join(",")
     
-    const notes: Partial<NoteItem>[] = await this.getNotesByNoteIds(PK,[SK],ProjectionExpression,ProjectionAttributeNames)
+    const notes: PartialNoteItem[] = await this.getNotesByNoteIds(PK,[SK],ProjectionExpression,ProjectionAttributeNames)
 
     return notes.reduce<NoteMediaItem[]>((acc, note) => {
-      return [...acc, ...Object.values(note.medias || {})]
+      return [...acc, ...Object.values(note.medias || {}) as NoteMediaItem[]]
     }, [])
   }
 
   public async updateMediaStatus(
     PK: string,
     SK: string,
-    key_status: Record<string, NoteMediaStatus>
+    items: Pick<NoteMediaItem,'global_id'|'key'|'status'>[]
   ): Promise<void> {
     const ExpressionAttributeNames: Record<string, string> = {
       '#status': 'status',
       '#medias': 'medias',
+      '#mgids': 'mgids'
     };
     const AttributeValues: Record<string, any> = {};
     const updateExpressions: string[] = [];
 
-    Object.entries(key_status).forEach(([key, status], index) => {
-      // The expression now uses the new alias for "medias"
-      updateExpressions.push(`#medias.#key${index}.#status = :status${index}`);
-      ExpressionAttributeNames[`#key${index}`] = key;
-      AttributeValues[`:status${index}`] = status;
+    items.forEach(({global_id,key,status}, index) => {
+      const mediakeyname = `#mediakey${index}`
+      const mediavalname = `:mediaval${index}`
+      updateExpressions.push(`#medias.${mediakeyname}.#status = ${mediavalname}`);
+      ExpressionAttributeNames[mediakeyname] = key
+      AttributeValues[mediavalname] = status
+
+      const mgidskeyname = `#mgidskey${index}`
+      const mgidsvalname = `:mgidsval${index}`
+      updateExpressions.push(`#mgids.${mgidskeyname} = ${mgidsvalname}`);
+      ExpressionAttributeNames[mgidskeyname] = global_id
+      AttributeValues[mgidsvalname] = key
     });
 
     const UpdateExpression = `SET ${updateExpressions.join(', ')}`;
@@ -225,26 +237,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
   }
 
   public async updateMultipleNotes(PK: string,inputs: UpdateNoteDataInput[]): Promise<UpdateNoteDataOutput> {
-
-    const data_map: Record<string,UpdateNoteDataInput> = inputs.reduce((acc,input)=> {
-      acc[input.SK] = input
-      return acc
-    }, {} as Record<string,UpdateNoteDataInput>) 
-
-
     const promises = inputs.map(async (input) => {
-      const permitedMediaCount: number = this.maxMediasPerItem 
-                                + (input.remove_medias?.length || 0 ) - (input.add_medias?.length || 0 )
       const SetExpressions: string[] = []
-      const RemoveExpressions: string[] = []
-      const ConditionExpression = "size(#medias) <= :permitedMediaCount"
-      const ExpressionAttributeValues: Record<string,any> = {
-        ":permitedMediaCount": permitedMediaCount
-      }
-      const ExpressionAttributeNames: Record<string,string> = {
-        "#medias": "medias"
-      }
-      
+      const ExpressionAttributeValues: Record<string,any> = {}
       SetExpressions.push(`timestamp_modified = :timestamp_modified`)
       ExpressionAttributeValues[':timestamp_modified'] = input.timestamp_modified
       if (input.title) {
@@ -257,34 +252,13 @@ export class NoteDynamoDbDataService implements NoteDataService {
         ExpressionAttributeValues[':content'] = input.content
         ExpressionAttributeValues[':short_content'] = NoteItem.createShortContent(input.content)
       }
-      input.add_medias?.forEach((media,index) => {
-        const keyname = `#mediakey${index}`
-        const valuename = `:mediaval${index}`
-        SetExpressions.push(`#medias.${keyname} = ${valuename}`)
-        ExpressionAttributeValues[valuename] = media
-        ExpressionAttributeNames[keyname] = media.key
-      })
-      input.remove_medias?.forEach((key,index) => {
-        const keyname = `#mediakey${index}`
-        RemoveExpressions.push(`#medias.${keyname}`)
-        ExpressionAttributeNames[keyname] = key
-      })
-
-      let UpdateExpression = ""
-      if (SetExpressions.length > 0) {
-        UpdateExpression += `SET ${SetExpressions.join(", ")}`
-      }
-      if (RemoveExpressions.length > 0) {
-        UpdateExpression += ` REMOVE ${RemoveExpressions.join(", ")}`
-      }
+      const UpdateExpression = `SET ${SetExpressions.join(", ")}`
 
       try {
         const cmd = new UpdateItemCommand({
           TableName: TABLE_USER_NOTES,
           Key: marshall({PK,SK: input.SK}),
           UpdateExpression,
-          ConditionExpression,
-          ExpressionAttributeNames,
           ExpressionAttributeValues: marshall(ExpressionAttributeValues),
           ReturnValues: 'ALL_NEW'
         })
@@ -298,61 +272,113 @@ export class NoteDynamoDbDataService implements NoteDataService {
     })
 
     const items = (await Promise.all(promises))
-                  .filter(note => null !== note)
+                  .filter(note => null !== note) // TODO: need to add the errors
 
     return { items }
   }
 
+  public async addNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]> {
+
+    const newMedias: NoteMediaItem[] = await this.filterNewMedias(PK,SK,medias)
+
+    const permitedMediaCount: number = this.maxMediasPerItem - newMedias.length
+    const UpdateExpressions: string[] = []
+    const ConditionExpression = `size(#medias) <= :permitedMediaCount`
+    const ExpressionAttributeValues: Record<string,any> = {
+      ":permitedMediaCount": permitedMediaCount
+    }
+    const ExpressionAttributeNames: Record<string,string> = {
+      '#medias': "medias",
+      '#mgids': 'mgids'
+    }
+    newMedias.forEach((media,index) => {
+      const mediakeyname = `#mediakey${index}`
+      const mediavalname = `:mediaval${index}`
+      UpdateExpressions.push(`#medias.${mediakeyname} = ${mediavalname}`)
+      ExpressionAttributeNames[mediakeyname] = media.key
+      ExpressionAttributeValues[mediavalname] = media
+
+      const mgidskeyname = `#mgids${index}`
+      const mgidsvalname = `:mgidsval${index}`
+      UpdateExpressions.push(`#mgids.${mgidskeyname} = ${mgidsvalname}`)
+      ExpressionAttributeNames[mgidskeyname] = media.global_id
+      ExpressionAttributeValues[mgidsvalname] = null
+    })
+    const UpdateExpression = `SET ${UpdateExpressions.join(", ")}`
+    const cmd = new UpdateItemCommand({
+      TableName: TABLE_USER_NOTES,
+      Key: marshall({PK,SK}),
+      UpdateExpression,
+      ConditionExpression,
+      ExpressionAttributeNames,
+      ExpressionAttributeValues: marshall(ExpressionAttributeValues),
+    })
+    await this.client.send(cmd)
+    return medias
+  }
+
+  private async filterNewMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]> {
+    const notes = await this.getNotesByNoteIds(PK,[SK],'mgids')
+    if (notes.length === 0) {
+      // note does not exists
+      return []
+    }
+    const mediaGIds: Record<string,string|null> | undefined = notes[0].mgids
+    if (!mediaGIds) {
+      return medias
+    }
+    return medias.filter(media => !mediaGIds[media.global_id])
+  }
+
+  public async removeNoteMedias(PK: string, SK: string, keyGids: Pick<NoteMediaItem,'global_id'|'key'>[]): Promise<string[]> {
+    const keys: string[] = []
+    const UpdateExpressions: string[] = []
+    const ExpressionAttributeNames: Record<string,string> = {}
+    keyGids?.forEach(({key,global_id},index) => {
+      const mediakeyname = `#mediakey${index}`
+      UpdateExpressions.push(`medias.${mediakeyname}`)
+      ExpressionAttributeNames[mediakeyname] = key
+
+      const mgidskeyname = `#mgidskey${index}`
+      UpdateExpressions.push(`mgids.${mgidskeyname}`)
+      ExpressionAttributeNames[mgidskeyname] = global_id
+
+      keys.push(key)
+    })
+    const UpdateExpression = `REMOVE ${UpdateExpressions.join(", ")}`
+    try {
+      const cmd = new UpdateItemCommand({
+        TableName: TABLE_USER_NOTES,
+        Key: marshall({PK,SK}),
+        UpdateExpression,
+        ExpressionAttributeNames,
+      })
+      await this.client.send(cmd)
+      
+      // retrun keys with media status AVAILABLE
+      return keys
+    }
+    catch(error) {
+      console.log(error) // TODO: remove console log
+    }
+    return []
+  }
+
   public async deleteMultipleNotes(PK: string, SKs: string[]): Promise<string[]> {
-    // Build a lookup of SK → { global_id, keys }
-    const notes: Record<string, { global_id: string; keys: string[] }> =
-      (await this.getNotesByNoteIds(PK, SKs, "SK,global_id,medias"))
-        .reduce((acc, { SK, global_id, medias }) => {
-          if (!SK) return acc; // safeguard
-          acc[SK] = {
-            global_id: global_id!,
-            keys: Object.keys(medias || {}),
-          };
-          return acc;
-        }, {} as Record<string, { global_id: string; keys: string[] }>);
-
-    // Delete each note
-    const promises = SKs.map(async (SK) => {
-      const note = notes[SK];
-      if (!note) return [];
-
-      const cmd = new TransactWriteItemsCommand({
-        TransactItems: [
-          {
-            Delete: {
-              TableName: TABLE_USER_NOTES,
-              Key: marshall({ PK, SK }),
-            },
-          },
-          {
-            Update: {
-              TableName: TABLE_USER_NOTES,
-              Key: marshall({ PK,SK: SK_NGID_NID_MAP}),
-              UpdateExpression: `REMOVE ${ATTRIBUTE_NGIDS_MAP}.#key`,
-              ExpressionAttributeNames: {
-                "#key": note.global_id
-              } 
-            },
-          },
-        ],
-      });
-
-      try {
-        await this.client.send(cmd);
-        return note.keys;
-      } catch (error) {
-        // optionally log error
-        return [];
+    const cmd = new BatchWriteItemCommand({
+      RequestItems: {
+        [TABLE_USER_NOTES]: SKs.map(SK => {
+          return {
+            DeleteRequest: {
+              Key: marshall({PK,SK})
+            }
+          }
+        })
       }
-    });
+    })
 
-    const output = await Promise.all(promises);
-    return output.flat(); // flatten keys into one string[]
+    const { UnprocessedItems } = await this.client.send(cmd)
+    return UnprocessedItems?.[TABLE_USER_NOTES]?.map(request => unmarshall(request.DeleteRequest!.Key!).SK) || []
 }
 
   private async getNotesByNoteIds(
@@ -360,7 +386,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
     SKs: string[],
     ProjectionExpression?: string,
     ExpressionAttributeNames?: Record<string, string>
-  ): Promise<Partial<NoteItem>[]> {
+  ): Promise<PartialNoteItem[]> {
     const cmd = new BatchGetItemCommand({
       RequestItems: {
         [TABLE_USER_NOTES]: {
@@ -372,6 +398,6 @@ export class NoteDynamoDbDataService implements NoteDataService {
     });
 
     const { Responses } = await this.client.send(cmd);
-    return Responses?.[TABLE_USER_NOTES]?.map(response => unmarshall(response)) || []
+    return (Responses?.[TABLE_USER_NOTES]?.map(response => unmarshall(response)) || []) as PartialNoteItem[]
   }
 }

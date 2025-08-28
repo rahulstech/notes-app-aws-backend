@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
 import {
+  AddNoteMediasRule,
   CreateNotesRule,
   DeleteNotesRule,
   NoteIdParameterRule,
-  NoteMediasUploadRule,
+  RemoveNoteMediasRule,
   UpdateNotesRule,
 } from '../validation/NoteRouterValidationRule';
 import { AppError } from '@notes-app/common';
 import { catchError } from '../middleware/Error';
 import { validateRequest } from '../middleware/Validator';
+import { AddMediaInputItem, RemoveMediaItem } from '@note-app/note-repository';
 
 const router = Router();
 
@@ -58,31 +60,70 @@ router
   );
 
 router
-  .route('/:note_id')
-  .all(validateRequest(NoteIdParameterRule))
-  .get(
-    catchError(async (req: Request, res: Response) => {
-      const { note_id } = req.validValue.params;
-      const output = await req.noteRepository.getNote({
-        user_id: 'GUEST',
-        note_id,
-      });
-      if (output.note !== null) {
-        res.json(output);
-      } else {
-        throw new AppError(404);
+  .route('/medias')
+  .put(validateRequest(AddNoteMediasRule), catchError(async (req: Request, res: Response) => {
+    const media_inputs: any[] = req.validValue.body.medias
+    const note_medias = media_inputs.reduce<Record<string,AddMediaInputItem[]>>((acc,{note_id,global_id,key,type,size})=> {
+      if (!acc[note_id]) {
+        acc[note_id] = []
       }
-    })
-  );
+      acc[note_id].push({global_id,type,size,key})
+      return acc
+    },{})
 
-router.post(
-  '/media_upload_urls',
-  validateRequest(NoteMediasUploadRule),
-  catchError(async (req: Request, res: Response) => {
-    const { media_keys } = req.validValue.body
-    const output = await req.noteRepository.getMediaUploadUrls({ user_id: "GUEST", media_keys })
-    res.json(output)
-  })
-);
+    const { medias } = await req.noteRepository.addMedias({
+      user_id: 'GUEST',
+      note_medias
+    })
+
+    res.json({
+      medias
+    })
+  }))
+  .delete(validateRequest(RemoveNoteMediasRule), catchError(async (req: Request, res: Response) => {
+    const medias: any[] = req.validValue.body.medias
+    const note_medias = medias.reduce<Record<string,RemoveMediaItem[]>>((acc: any,{note_id,global_id,key}) => {
+      if (!acc[note_id]) {
+        acc[note_id] = []
+      }
+      acc[note_id].push({global_id,key})
+      return acc
+    },{})
+    const { failure } = await req.noteRepository.removeMedias({
+      user_id: 'GUEST',
+      note_medias
+    })
+    if (failure) {
+      res.json({
+         failure 
+      })
+    }
+    else {
+      res.sendStatus(200)
+    }
+  }))
+
+const note_id_router = Router({ 
+  mergeParams: true, // required, otherwise note_id parameter will not pass to this router 
+})
+
+note_id_router.use(validateRequest(NoteIdParameterRule))
+
+// for /notes/:note_id i need to use get('') not get('/')
+// get('/') will match /notes/:note_id/
+note_id_router.get('',catchError(async (req: Request, res: Response) => {
+  const { note_id } = req.validValue.params;
+  const output = await req.noteRepository.getNote({
+    user_id: 'GUEST',
+    note_id,
+  });
+  if (output.note !== null) {
+    res.json(output);
+  } else {
+    throw new AppError(404);
+  }
+}))
+
+router.use('/:note_id', note_id_router)
 
 export default router;

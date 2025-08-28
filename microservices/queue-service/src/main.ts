@@ -9,6 +9,8 @@ import {
   QueueMessageSourceType,
 } from '@notes-app/queue-service';
 import { NoteS3ObjectService } from '@notes-app/storage-service';
+import { NoteRepositoryImpl, splitNoteMediaKey } from '@note-app/note-repository'
+import { HandleEventOutput } from './types';
 
 const {
   AWS_ACCESS_KEY_ID,
@@ -40,62 +42,141 @@ const dataService = new NoteDynamoDbDataService({
   maxMediasPerItem: Number(MAX_ALLOWED_MEDIAS_PER_NOTE || 5)
 });
 
-async function handle(message: QueueMessage): Promise<boolean> {
-  console.log('==============================================');
-  console.log('received message ', message);
+const noteRepository = new NoteRepositoryImpl({
+  databaseService: dataService, queueService, storageService: objectService
+})
 
-  const { source_type } = message;
+async function handleDeleteNotesEvent(message: QueueMessage[]): Promise<HandleEventOutput> {
+  const outputs = await Promise.all(message.map(async (message) => {
+    try {
+      const keys = await objectService.getKeysByPrefix(message.body.prefix)
+      return { keys, message }
+    }
+    catch(error) {
+      console.log(error) // TODO: remove log
+      return {}
+    }
+  }))
 
-  if (source_type == QueueMessageSourceType.S3) {
-    return handleS3Message(message);
-  } else if (source_type == QueueMessageSourceType.NOTE_SERVICE) {
-    return handleNoteServiceMessage(message);
+  const consumed: QueueMessage[] = []
+  let allKeys: string[] = []
+  outputs.forEach(({keys,message}) => {
+    if (keys) {
+      allKeys = allKeys.concat(keys)
+      consumed.push(message)
+    }
+  })
+
+  let requeue: QueueMessage[] | undefined
+  if (allKeys.length > 0) {
+    const failedKeys = await objectService.deleteMultipleObjects(allKeys)
+    requeue = [{
+      source_type: QueueMessageSourceType.QUEUE_SERVICE,
+      event_type: QueueMessageEventType.DELETE_MEDIAS,
+      body: { keys: failedKeys }
+    }]
   }
 
-  return false;
+  return { consumed, requeue }
 }
 
-async function handleS3Message(message: QueueMessage): Promise<boolean> {
-  // parse the queue message
-  const object_key: string = message.body.object_key;
-  const segments: string[] = object_key.split('/');
-  const user_id = segments[1]!;
-  const note_id = segments[2]!;
+async function handleDeleteMediasEvent(messages: QueueMessage[]): Promise<HandleEventOutput> {
+  const consumed = (await Promise.all(messages.map(async (message) => {
+      const { keys } = message.body
+      try {
+        await objectService.deleteMultipleObjects(keys)
+        return message
+      }
+      catch(error) {
+        console.log(error) // TODO: remove log
+      }
+      return null
+    }))
+  ).filter(value => value !== null)
 
-  const key_status: Record<string, NoteMediaStatus> = {};
-  key_status[object_key] = NoteMediaStatus.AVAILABLE;
-
-  // update the db note item with media item
-  await dataService.updateMediaStatus(note_id, user_id, key_status);
-
-  return true;
+  return { consumed }
 }
 
-async function handleNoteServiceMessage(
-  message: QueueMessage
-): Promise<boolean> {
-  const { event_type, body } = message;
+async function handleCreateObjectEvent(message: QueueMessage[]): Promise<HandleEventOutput> {
+  const consumed = (await Promise.all(message.map(async (message) => {
+      const { key } = message.body;
+      const { user_id, note_id } = splitNoteMediaKey(key)
+      try {
+        // update the db note item with media item
+        await noteRepository.updateMediaStatus({ 
+          user_id, 
+          medias: { 
+            [note_id]: [
+              { key, status: NoteMediaStatus.AVAILABLE }
+            ]
+        }});
+        return message
+      }
+      catch(error) {
+        console.log(error) // TODO: remove log
+      }
+      return null
+    }))
+  ).filter(value => value !== null)
+  
+  return { consumed }
+}
 
-  if (event_type == QueueMessageEventType.DELETE_MEDIAS) {
-    const { keys } = body;
-    await objectService.deleteMultipleObjects(keys);
-    return true;
+function mapByEventType(messages: QueueMessage[]): Record<QueueMessageEventType, QueueMessage[]>{
+  return messages.reduce((acc,message)=>{
+    const event_type = message.event_type
+    if (!acc[event_type]) {
+      acc[event_type] = []
+    }
+    acc[event_type].push(message)
+    return acc
+  },{} as Record<QueueMessageEventType, QueueMessage[]>)
+}
+
+async function handleEvent(event_type: QueueMessageEventType, messages: QueueMessage[]): Promise<HandleEventOutput> {
+  switch(event_type) {
+    case QueueMessageEventType.DELETE_NOTES: return await handleDeleteNotesEvent(messages)
+    case QueueMessageEventType.DELETE_MEDIAS: return await handleDeleteMediasEvent(messages)
+    case QueueMessageEventType.CREATE_OBJECT: return await handleCreateObjectEvent(messages)
+    default: []
   }
-
-  return false;
 }
 
 async function main() {
-  // TODO: need to manage messages in batch
   while (true) {
     const queuMessages = await queueService.peekMultipleMessages();
     if (queuMessages.length == 0) {
       continue;
     }
-    const promises = queuMessages.map((message) => handle(message));
-    const results = await Promise.all(promises);
-    const removeMessages = queuMessages.filter((_, index) => results[index]);
-    await queueService.removeMultipleMessages(removeMessages);
+
+    const sorted = mapByEventType(queuMessages)
+    const outputs: HandleEventOutput[]
+          = await Promise.all(Object.entries(sorted)
+                                      .map(async ([event_type,messages]) => handleEvent(QueueMessageEventType[event_type],messages)))
+
+    const { consumed, requeue } = outputs.reduce<HandleEventOutput>((acc,{consumed,requeue}) => {
+      if (consumed) {
+        if (!acc.consumed) {
+          acc.consumed = []
+        }
+        acc.consumed = acc.consumed.concat(consumed)
+      }
+      if (requeue) {
+        if (!acc.requeue) {
+          acc.requeue = []
+        }
+        acc.requeue = acc.requeue.concat(requeue)
+      }
+      return acc
+    },{})
+
+    if (consumed && consumed.length > 0) {
+      await queueService.removeMultipleMessages(consumed);
+    }
+
+    if (requeue && requeue.length > 0) {
+      await queueService.enqueuMultipleMessages(requeue);
+    }
   }
 }
 
