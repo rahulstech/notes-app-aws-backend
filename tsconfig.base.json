@@ -12,6 +12,7 @@
     "experimentalDecorators": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
+    "esModuleInterop": true,
     "paths": {
       "@note-app/note-repository": ["domain/note-repository/src/index.ts"],
       "@notes-app/common": ["common/src/index.ts"],

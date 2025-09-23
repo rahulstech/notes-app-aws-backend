@@ -1,129 +1,147 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import {
   AddNoteMediasRule,
   CreateNotesRule,
   DeleteNotesRule,
+  GetNoteMediaUploadUrlRule,
+  GetNotesRule,
   NoteIdParameterRule,
   RemoveNoteMediasRule,
   UpdateNotesRule,
 } from '../validation/NoteRouterValidationRule';
-import { AppError } from '@notes-app/common';
 import { catchError } from '../middleware/Error';
 import { validateRequest } from '../middleware/Validator';
-import { AddMediaInputItem, RemoveMediaItem } from '@note-app/note-repository';
+import { NoteApiExpressRequest } from '../types';
+import { newAppErrorBuilder } from '@notes-app/common';
 
 const router = Router();
+
+router.use((req: NoteApiExpressRequest, res: Response, next: NextFunction) => {
+  if (!req.userClaim) {
+    const error = newAppErrorBuilder()
+                  .setHttpCode(401)
+                  .setOperational(true)
+                  .build();
+    next(error);
+  }
+  else {
+    next();
+  }
+})
+
+// path: /notes
 
 router
   .route('/')
   .post(
     validateRequest(CreateNotesRule),
-    catchError(async (req: Request, res: Response) => {
+    catchError(async (req: NoteApiExpressRequest, res: Response) => {
       const { notes } = req.validValue.body;
       const output = await req.noteRepository.createNotes({
-        user_id: 'GUEST',
-        notes,
+        PK: req.userClaim.userId,
+        inputs: notes,
       });
       res.json(output);
     })
   )
   .get(
-    catchError(async (req: Request, res: Response) => {
-      const notes = await req.noteRepository.getNotes({ user_id: 'GUEST' });
-      res.json(notes);
+    validateRequest(GetNotesRule),
+    catchError(async (req: NoteApiExpressRequest, res: Response) => {
+      const { limit, pageMark } = req.validValue.query;
+      const output = await req.noteRepository.getNotes({
+         PK: req.userClaim.userId,
+         limit,
+         pageMark
+        });
+      res.json(output);
     })
   )
   .patch(
     validateRequest(UpdateNotesRule),
-    catchError(async (req: Request, res: Response) => {
+    catchError(async (req: NoteApiExpressRequest, res: Response) => {
       const { notes } = req.validValue.body;
-      const output = await req.noteRepository.updateNotes({
-        user_id: 'GUEST',
-        notes: notes.map(({note_id,timestamp_modified,title,content,add_medias,remove_medias}) => ({ 
-          SK: note_id,timestamp_modified,title,content,add_medias,remove_medias
-        })),
+      const { outputs } = await req.noteRepository.updateNotes({
+        PK: req.userClaim.userId,
+        inputs: notes,
       });
-      console.log("output: ",output);
-      res.json(output)
+      res.json({
+        result: outputs,
+      })
     })
   )
   .delete(
     validateRequest(DeleteNotesRule),
-    catchError(async (req: Request, res: Response) => {
-      const { note_ids } = req.validValue.body;
+    catchError(async (req: NoteApiExpressRequest, res: Response) => {
+      const { SKs } = req.validValue.body;
       await req.noteRepository.deleteNotes({
-        user_id: 'GUEST',
-        note_ids
+        PK: req.userClaim.userId,
+        SKs
       });
       res.sendStatus(200);
     })
   );
 
-router
-  .route('/medias')
-  .put(validateRequest(AddNoteMediasRule), catchError(async (req: Request, res: Response) => {
-    const media_inputs: any[] = req.validValue.body.medias
-    const note_medias = media_inputs.reduce<Record<string,AddMediaInputItem[]>>((acc,{note_id,global_id,key,type,size})=> {
-      if (!acc[note_id]) {
-        acc[note_id] = []
-      }
-      acc[note_id].push({global_id,type,size,key})
-      return acc
-    },{})
+// path /notes/medias
 
-    const { medias } = await req.noteRepository.addMedias({
-      user_id: 'GUEST',
-      note_medias
+const mediasRouter = Router({
+  mergeParams: true,
+});
+
+// for /notes/media i need to use get('') not get('/')
+// get('/') will match /notes/medias/
+mediasRouter.route('')
+  .post(validateRequest(AddNoteMediasRule), catchError(async (req: NoteApiExpressRequest, res: Response) => {
+    const { data } = req.validValue.body;
+    const { outputs } = await req.noteRepository.addMedias({
+      PK: req.userClaim.userId,
+      inputs: data,
     })
-
     res.json({
-      medias
+      result: outputs,
     })
   }))
-  .delete(validateRequest(RemoveNoteMediasRule), catchError(async (req: Request, res: Response) => {
-    const medias: any[] = req.validValue.body.medias
-    const note_medias = medias.reduce<Record<string,RemoveMediaItem[]>>((acc: any,{note_id,global_id,key}) => {
-      if (!acc[note_id]) {
-        acc[note_id] = []
-      }
-      acc[note_id].push({global_id,key})
-      return acc
-    },{})
-    const { failure } = await req.noteRepository.removeMedias({
-      user_id: 'GUEST',
-      note_medias
-    })
-    if (failure) {
-      res.json({
-         failure 
-      })
+  .delete(validateRequest(RemoveNoteMediasRule), catchError(async (req: NoteApiExpressRequest, res: Response) => {
+    const { data } = req.validValue.body;
+    const { unsuccessful } = await req.noteRepository.removeMedias({
+      PK: req.userClaim.userId,
+      inputs: data,
+    });
+    if (unsuccessful) {
+      res.status(207).json({
+         unsuccessful,
+      });
     }
     else {
-      res.sendStatus(200)
+      res.sendStatus(200);
     }
-  }))
+  }));
 
-const note_id_router = Router({ 
-  mergeParams: true, // required, otherwise note_id parameter will not pass to this router 
-})
+mediasRouter.put('/uploadurl', 
+  validateRequest(GetNoteMediaUploadUrlRule), 
+  catchError(async (req: NoteApiExpressRequest, res: Response) => {
+    const { data } = req.validValue.body;
+    const { outputs } = await req.noteRepository.getMediaUploadUrl({
+      PK: req.userClaim.userId,
+      inputs: data,
+    });
+    res.json({
+      result: outputs,
+    })
+  }));
 
-note_id_router.use(validateRequest(NoteIdParameterRule))
+router.use('/medias', mediasRouter);
 
-// for /notes/:note_id i need to use get('') not get('/')
-// get('/') will match /notes/:note_id/
-note_id_router.get('',catchError(async (req: Request, res: Response) => {
-  const { note_id } = req.validValue.params;
-  const output = await req.noteRepository.getNote({
-    user_id: 'GUEST',
-    note_id,
-  });
-  if (output.note !== null) {
+// path: /notes/:note_id
+
+router.get('/:note_id',
+  validateRequest(NoteIdParameterRule), 
+  catchError(async (req: NoteApiExpressRequest, res: Response) => {
+    const { note_id } = req.validValue.params;
+    const output = await req.noteRepository.getNote({
+      PK: req.userClaim.userId,
+      SK: note_id,
+    });
     res.json(output);
-  } else {
-    throw new AppError(404);
-  }
-}))
-
-router.use('/:note_id', note_id_router)
+}));
 
 export default router;

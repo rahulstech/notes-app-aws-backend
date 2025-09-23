@@ -1,18 +1,18 @@
 import {
   DeleteMessageBatchCommand,
-  Message,
   ReceiveMessageCommand,
   SendMessageBatchCommand,
   SendMessageCommand,
   SQSClient,
 } from '@aws-sdk/client-sqs';
-import { randomUUID } from 'node:crypto';
 import { NoteQueueService } from '../NoteQueueService';
 import {
   QueueMessage,
   QueueMessageEventType,
   QueueMessageSourceType,
+  RawQueueMessage,
 } from '../types';
+import { convertSQSError } from '../errors';
 
 const DEFAULT_DEQUEUE_POLL_SECONDS = 20;
 
@@ -24,10 +24,8 @@ const sourceLookup: Record<string, QueueMessageSourceType> = {
 
 const eventLookup: Record<string, QueueMessageEventType> = {
   "ObjectCreated:Put": QueueMessageEventType.CREATE_OBJECT,
-  "ObjectCreated:Post": QueueMessageEventType.CREATE_OBJECT,
-  "ObjectCreated:CompleteMultipartUpload": QueueMessageEventType.CREATE_OBJECT,
-  "DELETE_NOTES": QueueMessageEventType.DELETE_NOTES,
   "DELETE_MEDIAS": QueueMessageEventType.DELETE_MEDIAS,
+  "DELETE_NOTES": QueueMessageEventType.DELETE_NOTES,
 };
 
 function getSourceType(raw?: string): QueueMessageSourceType {
@@ -48,19 +46,18 @@ function parseMessageBody(
   switch (source_type) {
     case QueueMessageSourceType.S3:
       if (event_type === QueueMessageEventType.CREATE_OBJECT) {
-        // AWS S3 event body is in Records[0].s3
+        // AWS S3 event body is located inside Records[0].s3
         return {
-          bucket: rawBody.bucket.name,
-          key: rawBody.object.key,
+          bucket: rawBody.bucket?.name,
+          key: rawBody.object?.key,
         }
       }
   }
-
-  // Default fallback
+  // Fallback: return the raw body as-is
   return rawBody;
 }
 
-export interface SQSClientOptions {
+export interface NoteSQSQueueServiceOptions {
   region: string;
   accessKeyId: string;
   secretAccessKey: string;
@@ -73,7 +70,7 @@ export class NoteSQSQueueService implements NoteQueueService {
   private pollSeconds: number;
   private queueUrl: string;
 
-  constructor(options: SQSClientOptions) {
+  constructor(options: NoteSQSQueueServiceOptions) {
     const { region, accessKeyId, secretAccessKey, pollSeconds, queueUrl } =
       options;
     this.client = new SQSClient({
@@ -87,73 +84,106 @@ export class NoteSQSQueueService implements NoteQueueService {
     this.queueUrl = queueUrl;
   }
 
+  /**
+   * Enqueue a single message into the SQS queue.
+   * If SQS rejects the request (due to invalid content, throttling, or other errors),
+   * the raw AWS error is converted into a consistent AppError before being thrown.
+   */
   public async enqueueMessage(message: QueueMessage): Promise<void> {
-    const cmd = new SendMessageCommand({
-      QueueUrl: this.queueUrl,
-      MessageBody: JSON.stringify(message)
-    });
-
-    await this.client.send(cmd);
+    try {
+      await this.client.send(
+        new SendMessageCommand({
+          QueueUrl: this.queueUrl,
+          MessageBody: JSON.stringify(message),
+        })
+      );
+    } catch (error) {
+      throw convertSQSError(error);
+    }
   }
 
+  /**
+   * Enqueue multiple messages in a single batch call.
+   * Batch operations can fail partially: some messages may succeed while others fail.
+   * In case of error, the failure is wrapped into an AppError to make handling consistent.
+   */
   public async enqueuMultipleMessages(messages: QueueMessage[]): Promise<void> {
-    const cmd = new SendMessageBatchCommand({
-      QueueUrl: this.queueUrl,
-      Entries: messages.map(message => ({ Id: undefined, MessageBody: JSON.stringify(message)}))
-    })
-    
-    await this.client.send(cmd)
+    try {
+      const Entries = messages.map((message, index) => ({
+        Id: `send-message${index}`,
+        MessageBody: JSON.stringify(message),
+      }));
+      await this.client.send(
+        new SendMessageBatchCommand({
+          QueueUrl: this.queueUrl,
+          Entries,
+        })
+      );
+    } catch (error) {
+      throw convertSQSError(error);
+    }
   }
 
+  /**
+   * Poll the queue for up to 10 messages, waiting up to pollSeconds (default 20s).
+   * Long polling reduces empty responses and unnecessary API calls.
+   * Any errors during polling (like QueueDoesNotExist, InternalError) are normalized.
+   */
   public async peekMultipleMessages(): Promise<QueueMessage[]> {
-    const cmd = new ReceiveMessageCommand({
-      QueueUrl: this.queueUrl,
-      WaitTimeSeconds: this.pollSeconds,
-      MaxNumberOfMessages: 10,
+    try {
+      const cmd = new ReceiveMessageCommand({
+        QueueUrl: this.queueUrl,
+        WaitTimeSeconds: this.pollSeconds,
+        MaxNumberOfMessages: 10,
+        // By default, SQS does not return message attributes unless explicitly requested.
+        // "All" is a keyword that requests all attributes.
+        // MessageAttributeNames: ['All'],
+      });
 
-      // without explicitly mentioning this property the message attributes will not be returned even if exists.
-      // All is a keyword which means i need all the attributes. otherwise i can request message attributes by name.
-      MessageAttributeNames: ['All'],
-    });
-
-    const { Messages } = await this.client.send(cmd);
-    return Messages?.map(this.parseSqsMessage) ?? [];
+      const { Messages } = await this.client.send(cmd);
+      return Messages?.map(this.parseRawMessage) ?? [];
+    } catch (error) {
+      throw convertSQSError(error);
+    }
   }
 
-  private parseSqsMessage(message: Message): QueueMessage {
+  /**
+   * Converts an AWS SQS message into our internal QueueMessage representation.
+   * Handles both raw AWS S3 event payloads and normalized events produced by our services.
+   */
+  public parseRawMessage(message: RawQueueMessage): QueueMessage {
     const { Body, ReceiptHandle } = message;
     if (!Body) {
       return {
         source_type: QueueMessageSourceType.UNKNOWN,
-        event_type: QueueMessageEventType.UNKNOWN
-      }
+        event_type: QueueMessageEventType.UNKNOWN,
+      };
     }
-  
+
     let rawSource: string = QueueMessageSourceType.UNKNOWN;
     let rawEvent: string = QueueMessageEventType.UNKNOWN;
     let rawBody: any | undefined;
-  
+
     const parsed = JSON.parse(Body);
-  
-    // --- Case 1: S3 event (inside Records[])
+
+    // Case 1: S3 event from AWS (nested inside Records array)
     if ("Records" in parsed && Array.isArray(parsed.Records) && parsed.Records.length > 0) {
       const rec = parsed.Records[0];
       rawSource = rec.eventSource;
       rawEvent = rec.eventName;
       rawBody = rec.s3 ?? {};
     }
-
-    // --- Case 2: Already-normalized event
+    // Case 2: Pre-normalized event produced by another service
     else if ("source_type" in parsed && "event_type" in parsed) {
       rawSource = parsed.source_type;
       rawEvent = parsed.event_type;
       rawBody = parsed.body ?? {};
     }
 
-    const source_type = getSourceType(rawSource)
-    const event_type = getEventType(rawEvent)
-    const body = parseMessageBody(source_type,event_type,rawBody)
-  
+    const source_type = getSourceType(rawSource);
+    const event_type = getEventType(rawEvent);
+    const body = parseMessageBody(source_type, event_type, rawBody);
+
     return {
       source_type,
       event_type,
@@ -162,19 +192,27 @@ export class NoteSQSQueueService implements NoteQueueService {
     };
   }
 
+  /**
+   * Removes multiple messages from the queue after they have been processed.
+   * If a receipt handle is invalid or expired, the error is caught and normalized.
+   */
   public async removeMultipleMessages(messages: QueueMessage[]): Promise<void> {
     if (messages.length === 0) {
-      return
+      return;
     }
-    const Entries = messages.map((message) => ({
-      Id: randomUUID(),
-      ReceiptHandle: message.receipt_handle,
-    }));
-    const cmd = new DeleteMessageBatchCommand({
-      QueueUrl: this.queueUrl,
-      Entries,
-    });
 
-    await this.client.send(cmd);
+    try {
+      const Entries = messages.map((message,index) => ({
+        Id: `delete-message${index}`,
+        ReceiptHandle: message.receipt_handle,
+      }));
+      const cmd = new DeleteMessageBatchCommand({
+        QueueUrl: this.queueUrl,
+        Entries,
+      });
+      await this.client.send(cmd);
+    } catch (error) {
+      throw convertSQSError(error);
+    }
   }
 }

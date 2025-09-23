@@ -13,7 +13,7 @@
         "tsConfig": "common/tsconfig.lib.json",
         "assets": ["common/*.md"],
         "format": ["cjs"],
-        "generatePackageJson": true
+        "generatePackageJson": false
       }
     }
   },

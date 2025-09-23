@@ -1,7 +1,8 @@
-import { NoteItem } from './model/Note';
 import { AppError } from '@notes-app/common'
 
-export type ShortNoteItem = Omit<InstanceType<typeof NoteItem>, "medias"|"content">
+// interface ErrorItem {
+//   error?: AppError;
+// }
 
 export enum NoteMediaStatus {
   AVAILABLE = 'AVAILABLE',
@@ -15,30 +16,47 @@ export interface NoteMediaItem {
   size: number;
   status: NoteMediaStatus;
   global_id: string;
+  media_id: string;
 }
 
-export interface CreateNoteDataOutput {
-  items?: NoteItem[];
-  error?: AppError;
-}
-
-export interface UpdateNoteDataInput {
+export interface NoteItem {
+  PK: string;
   SK: string;
-  title?: string;
-  content?: string;
+  global_id: string;
+  title: string;
+  content: string;
+  short_content: string;
+  medias?: Record<string, NoteMediaItem>
+  timestamp_created: number;
   timestamp_modified: number;
 }
 
-export interface UpdateNoteDataOutput {
-  items?: NoteItem[],
-  fail?: UpdateNoteDataInput[],
-  error?: AppError
+export type ShortNoteItem = Omit<NoteItem, "content">;
+
+export type CreateNoteDataInputItem = Pick<NoteItem,'global_id'|'title'|'content'|'short_content'|'timestamp_created'|'timestamp_modified'>;
+
+export type CreateNoteDataOutputItem = Pick<NoteItem, 'SK'|'global_id'|'title'|'short_content'|'content'|'timestamp_created'|'timestamp_modified'> & { error?: AppError };
+
+export interface CreateNoteDataInput {
+  PK: string;
+  inputs: CreateNoteDataInputItem[]
 }
 
-export interface UserNotesPrimaryKey {
-  PK: string;
-  SK: string;
+export interface GetNotesOutput {
+  notes: ShortNoteItem[];
+  limit: number;
+  pageMark?: string;
 }
+
+export interface UpdateNoteDataInputItem {
+  SK: string;
+  timestamp_modified: number;
+  title?: string;
+  content?: string;
+  short_content?: string;
+}
+
+export type UpdateNoteDataOutputItem = Required<Pick<NoteItem,'SK'>> & Partial<Pick<NoteItem,'title'|'content'|'short_content'|'timestamp_modified'>>;
 
 export interface NoteMediaOutput {
   PK: string;
@@ -49,9 +67,13 @@ export interface NoteMediaOutput {
   global_id?: string;
 }
 
-export interface NoteGlobalIdAndMediaKeysOutput {
-  PK: string;
-  SK: string;
-  global_id: string;
-  media_keys: string[];
+export interface UpdateMediaStatusInputItem {
+  media_id: string;
+  status: NoteMediaStatus;
+}
+
+export type RemoveNoteMediaItem = Pick<NoteMediaItem, 'global_id'|'key'>;
+
+export interface DeleteMultipleNotesDataOutput {
+  unsuccessful?: string[];
 }

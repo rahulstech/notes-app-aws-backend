@@ -9,11 +9,14 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ObjectUploadUrlInput, ObjectUploadUrlOutput } from '../types';
-import { convertS3Errors } from '../errors';
+import { convertS3Error } from '../errors';
+import { LOGGER } from '@notes-app/common';
+
+const LOG_TAG = 'NoteS3ObjectService';
 
 const PRESIGNED_URL_EXPIRES_IN = 900; // 15 minutes
 
-export interface S3ClientOptions {
+export interface NoteS3ObjectServiceOptions {
   region: string;
   accessKeyId: string;
   secretAccessKey: string;
@@ -26,7 +29,7 @@ export class NoteS3ObjectService implements NoteObjectService {
   private bucket: string;
   private mediaBaseUrl: string;
 
-  constructor(options: S3ClientOptions) {
+  constructor(options: NoteS3ObjectServiceOptions) {
     this.mediaBaseUrl = options.mediaBaseUrl;
     this.bucket = options.bucket;
     this.client = new S3Client({
@@ -57,12 +60,8 @@ export class NoteS3ObjectService implements NoteObjectService {
       }
     }
     catch(error) {
-      throw convertS3Errors(error,'getObjectUploadUrl')
+      throw convertS3Error(error)
     }
-  }
-
-  public createMediaObjectKey(...paths: string[]): string {
-    return ['medias', ...paths].join('/');
   }
 
   public getMediaUrl(key: string): string {
@@ -70,36 +69,47 @@ export class NoteS3ObjectService implements NoteObjectService {
   }
 
   public async deleteMultipleObjects(keys: string[]): Promise<string[]> {
-    const cmd = new DeleteObjectsCommand({
-      Bucket: this.bucket,
-      Delete: {
-        Objects: keys.map((Key) => ({ Key })),
-      },
-    });
     try {
-      const { Errors } = await this.client.send(cmd);
-      return Errors?.reduce<string[]>((acc,error) => {
-        if (error.Key) {
-          acc.push(error.Key)
+      const { Errors } = await this.client.send(new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: {
+          Objects: keys.map((Key) => ({ Key })),
+        },
+      }));
+      return Errors?.reduce<string[]>((acc,{Key}) => {
+        if (Key) {
+          acc.push(Key);
         }
-        return acc
-      },[]) ?? []
+        return acc;
+      },[]) ?? [];
     }
     catch(error) {
-      throw convertS3Errors(error,'deleteMultipleObjects')
+      throw convertS3Error(error);
     }
   }
 
-  public async getKeysByPrefix(prefix: string): Promise<string[]> {
+  public async deleteObjectByPrefix(prefix: string): Promise<void> {
+    let keys: string[] = await this.getKeysByPrefix(prefix);
+
+    let attemptLeft = 3;
+    while(keys.length > 0 && attemptLeft > 0) {
+      keys = await this.deleteMultipleObjects(keys);
+      attemptLeft--;
+    }
+  }
+
+  private async getKeysByPrefix(prefix: string): Promise<string[]> {
+    LOGGER.logInfo('getKeysByPrefix', { tag: LOG_TAG, prefix });
     try {
       const { Contents } = await this.client.send(new ListObjectsV2Command({
         Bucket: this.bucket,
         Prefix: prefix
       }))
-      return Contents?.map(value => value.Key!) ?? []
+      const keys = Contents?.map(value => value.Key!) ?? [];
+      return keys;
     }
     catch(error) {
-      throw convertS3Errors(error,'getKeysByPrefix')
+      throw convertS3Error(error);
     }
   }
 }

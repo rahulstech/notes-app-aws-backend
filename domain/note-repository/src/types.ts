@@ -1,103 +1,181 @@
-import { AppError } from "@notes-app/common";
-import { NoteItem, NoteMediaItem, NoteMediaStatus } from "@notes-app/database-service";
+import { NoteItem, NoteMediaItem, NoteMediaStatus, UpdateNoteDataInputItem } from "@notes-app/database-service";
 import { ObjectUploadUrlOutput } from "data/storage/src/types";
 
-interface Medias {
-  medias?: NoteMediaItem[];
+export interface ErrorItemOutput {
+  code: number;
+  message: string;
+  retriable: boolean;
 }
 
-type NoteItemType = Omit<InstanceType<typeof NoteItem>, 'PK' | 'SK' | 'medias'> & Medias
-                    & { user_id: string; note_id: string; }
+interface ErrorItem {
+  error?: ErrorItemOutput;
+}
 
-export type NoteItemOutput = Omit<NoteItemType, 'user_id'>;
+type NoteMediaItemType = Omit<NoteMediaItem,'status'>;
 
-export type CreateNoteItemInput = Omit<NoteItemType,'user_id' | 'note_id' | 'medias'> 
+export type NoteItemType = { user_id: string; note_id: string; } 
+                  & Omit<NoteItem, 'PK' | 'SK' | 'medias'> 
+                  & { medias?: NoteMediaItemType[] };
+
+/* Note related types */
+
+// create note
+
+export type CreateNoteItemInput = Omit<NoteItemType,'user_id'|'note_id' |'short_content'|'medias'> & Partial<Pick<NoteItemType,'short_content'>>;
+
+export type CreateNoteItemOutput = Omit<NoteItemType,'user_id'|'medias'> & ErrorItem;
 
 export interface CreateNotesInput {
-  user_id: string;
-  notes: CreateNoteItemInput[];
+  PK: string;
+  inputs: CreateNoteItemInput[];
 }
 
 export interface CreateNotesOutput {
-  notes?: NoteItemOutput[];
-  error?: AppError;
+  notes?: CreateNoteItemOutput[];
 }
 
+// read note
+
 export interface GetNoteInput {
-  user_id: string;
-  note_id: string;
+  PK: string;
+  SK: string;
 }
 
 export interface GetNoteOutput {
-  note: NoteItemOutput | null;
+  note: NoteItemType;
 }
 
 export interface GetNotesInput {
-  user_id: string;
+  PK: string;
+  limit: number;
+  pageMark?: string;
 }
 
 export interface GetNotesOutput {
-  notes?: Omit<NoteItemOutput, 'medias'>[];
-  error?: AppError;
+  limit: number;
+  count: number;
+  pageMark?: string;
+  notes: Omit<NoteItemType, 'user_id'|'medias'>[];
 }
 
-export type UpdateNoteItemInput = Partial<Omit<NoteItemType, 'global_id' | 'timestamp_created' | 'medias'>> 
-                                  & Required<Pick<NoteItemType, 'note_id' | 'timestamp_modified'>>
+// update note
+
+export type UpdateNoteItemInput = UpdateNoteDataInputItem;
+
+export type UpdateNoteItemOutput = Partial<Omit<NoteItemType, 'user_id'|'medias'>> & ErrorItem;
 
 export interface UpdateNotesInput {
-  user_id: string;
-  notes: UpdateNoteItemInput[];
+  PK: string;
+  inputs: UpdateNoteItemInput[];
 }
 
 export interface UpdateNotesOutput {
-  notes?: NoteItemOutput[],
-  error?: AppError
+  outputs?: UpdateNoteItemOutput[];
 }
 
-export interface AddMediaInputItem {
-  global_id: string;
-  type: string;
-  size: number;
-  key?: string;
+// delete note 
+
+export interface DeleteNotesInput {
+  PK: string;
+  SKs: string[];
 }
 
-export type AddMediaOutputItem = NoteMediaItem & Partial<ObjectUploadUrlOutput>;
+export interface DeleteNotesOutput {
+  unsuccessful?: string[];
+}
+
+/* NoteMedia related types */
+
+// add media
+
+export interface AddMediaItemInput {
+  SK: string;
+  medias: Required<Pick<NoteMediaItem, 'global_id'|'type'|'size'>>[];
+}
+
+export interface AddMediaItemOutput extends ErrorItem {
+  note_id: string;
+  medias?: Required<Omit<NoteMediaItem,'status'>>
+};
 
 export interface AddMediasInput {
-  user_id: string;
-  note_medias: Record<string,AddMediaInputItem[]>;
+  PK: string;
+  inputs: AddMediaItemInput[];
 }
 
 export interface AddMediasOutput {
-  medias?: AddMediaOutputItem[];
-  failure?: string[];
-  errors?: AppError;
+  outputs?: AddMediaItemOutput[];
 }
 
-export interface UpdateMediaStatusItem {
+// get media
+
+export interface GetMediaUploadUrlItemInput {
+  SK: string;
+  media_ids: string[];
+}
+
+export interface GetMediaUploadUrlItemOutput extends ErrorItem {
   note_id: string;
-  key: string;
+  urls?: ({ media_id: string } & Partial<ObjectUploadUrlOutput> & ErrorItem)[];
+  media_ids?: string[];
+}
+
+export interface GetMediaUploadUrlInput extends ErrorItem {
+  PK: string;
+  inputs: GetMediaUploadUrlItemInput[];
+}
+
+export interface GetMediaUploadUrlOutput {
+  outputs: GetMediaUploadUrlItemOutput[];
+}
+
+// udate media
+
+export interface UpdateMediaStatusItem {
+  media_id: string;
   status: NoteMediaStatus;
+  extras?: any;
 }
 
 export interface UpdateMediaStatusInput {
-  user_id: string,
-  medias: Record<string, Pick<NoteMediaItem,'key'|'status'>[]>
+  PK: string;
+  inputs: Record<string, UpdateMediaStatusItem[]>
 }
 
-export type RemoveMediaItem = Pick<NoteMediaItem,'global_id'|'key'>
+export interface UpdateMediaStatusOutput {
+  items?: UpdateMediaStatusItem[];
+}
+
+// delete media
+
+export interface RemoveMediaItem extends ErrorItem {
+  SK: string;
+  media_ids: string[];
+}
 
 export interface RemoveMediasInput {
-  user_id: string;
-  note_medias: Record<string,RemoveMediaItem[]>;
+  PK: string;
+  inputs: Omit<RemoveMediaItem,'error'>[];
 }
 
 export interface RemoveMediasOutput {
-  failure?: Record<string,RemoveMediaItem[]>;
-  error?: AppError;
+  unsuccessful?: RemoveMediaItem[];
 }
 
-export interface DeleteNotesInput {
-  user_id: string;
-  note_ids: string[];
+export interface DeleteMediasByPrefixInput {
+  prefixes: string[];
+  extras: any;
+}
+
+export interface DeleteMediasByPrefixOutput {
+  unsuccessful: string[];
+  extras: any;
+}
+
+export interface DeleteMediasByKeyInput {
+  keys: string[];
+}
+
+export interface DeleteMediasByKeyOutput {
+  unsuccessful?: string[];
 }

@@ -1,6 +1,6 @@
-import { Schema, ValidationError } from 'joi';
-import Joi = require('joi');
-import { AppError, newAppErrorBuilder } from '../error/AppError';
+import Joi, { Schema, ValidationError } from 'joi';
+
+import { AppError, newAppErrorBuilder } from './apperror';
 
 function createSchemFromObjectRule(rule: object): Schema {
   return Joi.object().keys(rule);
@@ -26,17 +26,15 @@ function convertValidationErrorToAppError(error: any): AppError {
 
 export type ValidationRule = Schema | object;
 
-export async function validate(rule: ValidationRule, input: any): Promise<any> {
-    let schema: Schema = Joi.isSchema(rule)
-      ? rule
-      : createSchemFromObjectRule(rule);
-    try {
-      return await schema.validateAsync(input, {
-        abortEarly: false,
-        stripUnknown: true,
-      });
-      
-    } catch (error: any) {
+export function validate(rule: ValidationRule, input: any): any {
+    let schema: Schema = Joi.isSchema(rule) ? rule : createSchemFromObjectRule(rule);
+    const { value, error } = schema.validate(input, {
+      abortEarly: false,
+      allowUnknown: true,
+      stripUnknown: true,
+    });
+    if (error) {
       throw convertValidationErrorToAppError(error);
     }
+    return value
 }

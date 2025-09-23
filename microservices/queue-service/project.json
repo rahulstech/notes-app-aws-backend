@@ -8,13 +8,12 @@
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
+      "defaultConfiguration": "development",
       "options": {
         "platform": "node",
         "outputPath": "dist/microservices/queue-service",
         "format": ["cjs"],
         "bundle": false,
-        "main": "microservices/queue-service/src/main.ts",
         "tsConfig": "microservices/queue-service/tsconfig.app.json",
         "assets": ["microservices/queue-service/src/assets"],
         "generatePackageJson": true,
@@ -26,8 +25,11 @@
         }
       },
       "configurations": {
-        "development": {},
+        "development": {
+          "main": "microservices/queue-service/src/main.ts"
+        },
         "production": {
+          "main": "microservices/queue-service/src/index.ts",
           "esbuildOptions": {
             "sourcemap": false,
             "outExtension": {

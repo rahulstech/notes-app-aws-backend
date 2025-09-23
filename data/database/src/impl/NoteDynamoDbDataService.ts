@@ -5,399 +5,550 @@ import {
   UpdateItemCommand,
   BatchGetItemCommand,
   TransactWriteItemsCommand,
+  DynamoDBClientConfig,
+  BatchGetItemCommandInput,
   BatchWriteItemCommand,
+  WriteRequest,
   PutItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import { NOTE_ITEM_PROJECTIONS, NoteItem } from '../model/Note';
 import { NoteDataService } from '../NoteDataService';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
-  CreateNoteDataOutput,
+  CreateNoteDataInputItem,
+  CreateNoteDataOutputItem,
+  DeleteMultipleNotesDataOutput,
+  GetNotesOutput,
+  NoteItem,
   NoteMediaItem,
   ShortNoteItem,
-  UpdateNoteDataInput,
-  UpdateNoteDataOutput,
+  UpdateMediaStatusInputItem,
+  UpdateNoteDataInputItem,
+  UpdateNoteDataOutputItem,
 } from '../types';
 import { randomUUID } from 'crypto';
-import { pickExcept } from '@notes-app/common';
+import { createRecord, decodeBase64, encodeBase64, executeChunk, newAppErrorBuilder, pickExcept } from '@notes-app/common';
+import { convertDynamoDbError, DYNAMODB_ERROR_CODES } from '../errors';
+import { fromNoteDBItem, toNoteDBItem } from '../helpers';
 
-const TABLE_USER_NOTES = 'user_notes';
-const NOTE_ID_PREFIX = 'NID';
-const SK_NGID_NID_MAP = "_NGID_NID_MAP_"
-const ATTRIBUTE_NGIDS_MAP = "ngids"
+const NOTE_ID_PREFIX = 'NID-';
+const SK_NGID_NID_MAP = "_NGID_NID_MAP_";
+const ATTRIBUTE_NGIDS_MAP = "ngids";
+const NOTEITEM_PROJECTIONS = ['PK','SK','global_id','title','content','short_content','timestamp_created','timestamp_modified','medias'];
+const SHORTNOTEITEM_PROJECTIONS = ['PK','SK','global_id','title','short_content','timestamp_created','timestamp_modified'];
 
-type PartialNoteMediaItem = Partial<NoteMediaItem>
-
-type PartialNoteItem = Partial<Omit<InstanceType<typeof NoteItem>,'medias'>> & { medias?: Record<string,PartialNoteMediaItem> }
-
-export interface DynamoDBClientOptions {
-  maxMediasPerItem: number
+export interface NoteDynamoDbDataServiceOptions {
+  region?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  localEndpointUrl?: string;
+  notesTableName: string;
+  maxMediasPerItem: number;
 }
 
 export class NoteDynamoDbDataService implements NoteDataService {
   private client: DynamoDBClient;
-  private maxMediasPerItem: number
+  private maxMediasPerItem: number;
+  private notesTableName: string;
 
-  constructor(options: DynamoDBClientOptions) {
-    const client = new DynamoDBClient({
-      endpoint: 'http://localhost:8000',
-    });
-    this.client = client;
-    this.maxMediasPerItem = options.maxMediasPerItem
-  }
-
-  public createNoteId(): string {
-    return `${NOTE_ID_PREFIX}-${randomUUID()}`;
-  }
-
-  public async createMultipleNotes(PK: string, notes: NoteItem[]): Promise<CreateNoteDataOutput> {
-
-    const gid_note: Record<string,NoteItem> = notes.reduce<Record<string,NoteItem>>((acc,note)=>{
-      acc[note.global_id] = note
-      return acc
-    },{})
-
-    const existing_notes: NoteItem[] = await this.getNotesByGlobalIds(PK, Object.keys(gid_note))
-
-    // remove existing notes from new notes
-    existing_notes.forEach(note => {
-      delete gid_note[note.global_id]
-    })
-
-    // put filted items
-    const promises = Object.values(gid_note).map(async (note) => {
-      const cmd = new TransactWriteItemsCommand({
-        TransactItems: [
-          {
-            Put: {
-              TableName: TABLE_USER_NOTES,
-              Item: note.toDBItem()
-            }
-          },
-          {
-            Update: {
-              TableName: TABLE_USER_NOTES,
-              Key: marshall({PK,SK: SK_NGID_NID_MAP}),
-              UpdateExpression: `SET ${ATTRIBUTE_NGIDS_MAP}.#key = :value`,
-              ExpressionAttributeNames: {
-                "#key": note.global_id
-              },
-              ExpressionAttributeValues: marshall({
-                ":value": note.SK
-              })
-            }
-          }
-        ]
-      })
-      try {
-        await this.client.send(cmd)
-        return note
-      }
-      catch(error) {
-        console.log(error) // TODO: remove log
-        return null
-      }
-    })
-
-    const new_notes = (await Promise.all(promises)).filter(note => note !== null)
+  constructor(options: NoteDynamoDbDataServiceOptions) {
+    const { localEndpointUrl, region, accessKeyId, secretAccessKey } = options;
     
-    return { items: [ ...existing_notes, ...new_notes] };
+    const isLocal = !!localEndpointUrl;
+    const isRemote = !!region && !!accessKeyId && !!secretAccessKey;
+
+    if (!isLocal && !isRemote) {
+      throw newAppErrorBuilder()
+            .setHttpCode(500)
+            .setCode(DYNAMODB_ERROR_CODES.CONFIGURATION_ERROR)
+            .addDetails("neither local nor remote configuration for dynamodb client provided")
+            .setOperational(false)
+            .build();
+    }
+
+    const config: DynamoDBClientConfig = {}
+    if (isLocal) {
+      config.endpoint = localEndpointUrl
+    }
+    else {
+      config.region = region;
+      config.credentials = { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey!}
+    }
+
+    const client = new DynamoDBClient(config);
+    this.client = client;
+    this.maxMediasPerItem = options.maxMediasPerItem;
+    this.notesTableName = options.notesTableName;
   }
 
-  private async getNotesByGlobalIds(PK: string, global_ids: string[]): Promise<NoteItem[]> {
-    try {
-      
-      // get the global_id note_id map
-      const ngid_nid_map = await this.getNoteIdsForNoteGlobalIds(PK, global_ids)
+  private createNoteId(): string {
+    return `${NOTE_ID_PREFIX}${randomUUID()}`;
+  }
 
-      // if not exists then add the map item and return empty
-      if (null == ngid_nid_map) {
-        return []
+  // create notes
+
+  public async createMultipleNotes(PK: string, inputs: CreateNoteDataInputItem[]): Promise<CreateNoteDataOutputItem[]> {
+    try {
+      // create global_id => noteitem map
+      const gidNote = createRecord<CreateNoteDataInputItem,string,CreateNoteDataInputItem>(inputs,note=>note.global_id,note=>note);
+      
+      // get exising notes by SK  
+      const existingNotes: CreateNoteDataOutputItem[] = await this.getNotesByGlobalIds(PK,Object.keys(gidNote));
+
+      // remove existing notes from map
+      for (const {global_id} of existingNotes) {
+        delete gidNote[global_id]
       }
 
-      // if exists get those note items by note_id
-      return (await this.getNotesByNoteIds(PK,Object.values(ngid_nid_map))) as NoteItem[]
+      // add new notes
+      const newNotes = await Promise.all(Object.values(gidNote).map(async (input) => {
+        const note = {
+          PK,
+          SK: this.createNoteId(),
+          ...input,
+        }
+        return await this.createSingleNote(note);
+      }));
+
+      return [...newNotes, ...existingNotes];
     }
     catch(error) {
-      throw error
+      throw convertDynamoDbError(error);
     }
   }
 
-  private async getNoteIdsForNoteGlobalIds(PK: string, global_ids: string[]): Promise<Record<string,string> | null> {
-    const ExpressionAttributeNames: Record<string,string> = {}
-    const ProjectionExpression: string = global_ids.map((gid,index) => {
-      const keyname = `#gid${index}`
-      ExpressionAttributeNames[keyname] = gid
-      return `ngids.${keyname}`
-    }).join(", ")
+  private async getNotesByGlobalIds(PK: string, global_ids: string[]): Promise<CreateNoteDataOutputItem[]> {
+    // get the global_id note_id map
+    const mapGidSK: Record<string,string> = await this.getNoteIdsForNoteGlobalIds(PK, global_ids);
+    const SKs: string[] = Object.values(mapGidSK);
 
-    const getCmd = new GetItemCommand({
-      TableName: TABLE_USER_NOTES,
-      Key: marshall({ PK, SK: SK_NGID_NID_MAP }),
-      ProjectionExpression,
-      ExpressionAttributeNames
-    })
-
-    const { Item } = await this.client.send(getCmd)
-    if (!Item) { 
-      const putCmd = new PutItemCommand({
-        TableName: TABLE_USER_NOTES,
-        Item: marshall({ PK, SK: SK_NGID_NID_MAP, ngids: {} as Record<string,string> })
-      })
-      
-      await this.client.send(putCmd)
-
-      return null
+    // if not exists then add the map item and return empty
+    if (SKs.length == 0) {
+      return [];
     }
 
-    return unmarshall(Item).ngids
-
+    // if exists get those note items by note_id
+    return await this.getNotesByNoteIds(PK,SKs);
   }
 
-  public async getNotes(PK: String): Promise<ShortNoteItem[]> {
-    const cmd = new QueryCommand({
-      TableName: TABLE_USER_NOTES,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-      ExpressionAttributeValues: marshall({
-        ':pk': PK,
-        ':sk': NOTE_ID_PREFIX,
-      }),
-      ProjectionExpression: pickExcept(NOTE_ITEM_PROJECTIONS,["medias"]).join(",")
-    });
-    const {Items} = await this.client.send(cmd);
-    return (
-      Items?.map((Item) => {
-        return NoteItem.fromDBItem(Item) as ShortNoteItem;
-      }) ?? []
-    );
-  }
-
-  public async getNoteById(PK: string, SK: string): Promise<NoteItem | null> {
-    const cmd = new GetItemCommand({
-      TableName: TABLE_USER_NOTES,
-      Key: marshall({PK,SK}),
-    });
-    const { Item } = await this.client.send(cmd);
-    return Item ? NoteItem.fromDBItem(Item) : null;
-  }
-
-  public async getNoteMediasByKeys(PK: string, SK: string, keys: string[]): Promise<NoteMediaItem[]> {
-    const ProjectionAttributeNames: Record<string,string> = {}
-    const ProjectionExpression = keys.map((key,index) => {
-      const keyname = `#key${index}`
-      ProjectionAttributeNames[keyname] = key
-      return `medias.${keyname}`
-    }).join(",")
-    
-    const notes: PartialNoteItem[] = await this.getNotesByNoteIds(PK,[SK],ProjectionExpression,ProjectionAttributeNames)
-
-    return notes.reduce<NoteMediaItem[]>((acc, note) => {
-      return [...acc, ...Object.values(note.medias || {}) as NoteMediaItem[]]
-    }, [])
-  }
-
-  public async updateMediaStatus(
-    PK: string,
-    SK: string,
-    items: Pick<NoteMediaItem,'global_id'|'key'|'status'>[]
-  ): Promise<void> {
-    const ExpressionAttributeNames: Record<string, string> = {
-      '#status': 'status',
-      '#medias': 'medias',
-      '#mgids': 'mgids'
-    };
-    const AttributeValues: Record<string, any> = {};
-    const updateExpressions: string[] = [];
-
-    items.forEach(({global_id,key,status}, index) => {
-      const mediakeyname = `#mediakey${index}`
-      const mediavalname = `:mediaval${index}`
-      updateExpressions.push(`#medias.${mediakeyname}.#status = ${mediavalname}`);
-      ExpressionAttributeNames[mediakeyname] = key
-      AttributeValues[mediavalname] = status
-
-      const mgidskeyname = `#mgidskey${index}`
-      const mgidsvalname = `:mgidsval${index}`
-      updateExpressions.push(`#mgids.${mgidskeyname} = ${mgidsvalname}`);
-      ExpressionAttributeNames[mgidskeyname] = global_id
-      AttributeValues[mgidsvalname] = key
-    });
-
-    const UpdateExpression = `SET ${updateExpressions.join(', ')}`;
-
-    const cmd = new UpdateItemCommand({
-      TableName: TABLE_USER_NOTES,
-      Key: marshall({ PK, SK }),
-      UpdateExpression,
-      ExpressionAttributeNames,
-      ExpressionAttributeValues: marshall(AttributeValues),
-    });
-
-    await this.client.send(cmd);
-  }
-
-  public async updateMultipleNotes(PK: string,inputs: UpdateNoteDataInput[]): Promise<UpdateNoteDataOutput> {
-    const promises = inputs.map(async (input) => {
-      const SetExpressions: string[] = []
-      const ExpressionAttributeValues: Record<string,any> = {}
-      SetExpressions.push(`timestamp_modified = :timestamp_modified`)
-      ExpressionAttributeValues[':timestamp_modified'] = input.timestamp_modified
-      if (input.title) {
-        SetExpressions.push(`title = :title`)
-        ExpressionAttributeValues[':title'] = input.title
-      }
-      if (input.content) {
-        SetExpressions.push(`content = :content`);
-        SetExpressions.push('short_content = :short_content');
-        ExpressionAttributeValues[':content'] = input.content
-        ExpressionAttributeValues[':short_content'] = NoteItem.createShortContent(input.content)
-      }
-      const UpdateExpression = `SET ${SetExpressions.join(", ")}`
-
-      try {
-        const cmd = new UpdateItemCommand({
-          TableName: TABLE_USER_NOTES,
-          Key: marshall({PK,SK: input.SK}),
-          UpdateExpression,
-          ExpressionAttributeValues: marshall(ExpressionAttributeValues),
-          ReturnValues: 'ALL_NEW'
-        })
-        const { Attributes } = await this.client.send(cmd)
-        return NoteItem.fromDBItem(Attributes!)
-      }
-      catch(error) {
-        console.log(error) // TODO: remove console log
-        return null
-      }
-    })
-
-    const items = (await Promise.all(promises))
-                  .filter(note => null !== note) // TODO: need to add the errors
-
-    return { items }
-  }
-
-  public async addNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]> {
-
-    const newMedias: NoteMediaItem[] = await this.filterNewMedias(PK,SK,medias)
-
-    const permitedMediaCount: number = this.maxMediasPerItem - newMedias.length
-    const UpdateExpressions: string[] = []
-    const ConditionExpression = `size(#medias) <= :permitedMediaCount`
-    const ExpressionAttributeValues: Record<string,any> = {
-      ":permitedMediaCount": permitedMediaCount
-    }
-    const ExpressionAttributeNames: Record<string,string> = {
-      '#medias': "medias",
-      '#mgids': 'mgids'
-    }
-    newMedias.forEach((media,index) => {
-      const mediakeyname = `#mediakey${index}`
-      const mediavalname = `:mediaval${index}`
-      UpdateExpressions.push(`#medias.${mediakeyname} = ${mediavalname}`)
-      ExpressionAttributeNames[mediakeyname] = media.key
-      ExpressionAttributeValues[mediavalname] = media
-
-      const mgidskeyname = `#mgids${index}`
-      const mgidsvalname = `:mgidsval${index}`
-      UpdateExpressions.push(`#mgids.${mgidskeyname} = ${mgidsvalname}`)
-      ExpressionAttributeNames[mgidskeyname] = media.global_id
-      ExpressionAttributeValues[mgidsvalname] = null
-    })
-    const UpdateExpression = `SET ${UpdateExpressions.join(", ")}`
-    const cmd = new UpdateItemCommand({
-      TableName: TABLE_USER_NOTES,
-      Key: marshall({PK,SK}),
-      UpdateExpression,
-      ConditionExpression,
-      ExpressionAttributeNames,
-      ExpressionAttributeValues: marshall(ExpressionAttributeValues),
-    })
-    await this.client.send(cmd)
-    return medias
-  }
-
-  private async filterNewMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]> {
-    const notes = await this.getNotesByNoteIds(PK,[SK],'mgids')
-    if (notes.length === 0) {
-      // note does not exists
-      return []
-    }
-    const mediaGIds: Record<string,string|null> | undefined = notes[0].mgids
-    if (!mediaGIds) {
-      return medias
-    }
-    return medias.filter(media => !mediaGIds[media.global_id])
-  }
-
-  public async removeNoteMedias(PK: string, SK: string, keyGids: Pick<NoteMediaItem,'global_id'|'key'>[]): Promise<string[]> {
-    const keys: string[] = []
-    const UpdateExpressions: string[] = []
-    const ExpressionAttributeNames: Record<string,string> = {}
-    keyGids?.forEach(({key,global_id},index) => {
-      const mediakeyname = `#mediakey${index}`
-      UpdateExpressions.push(`medias.${mediakeyname}`)
-      ExpressionAttributeNames[mediakeyname] = key
-
-      const mgidskeyname = `#mgidskey${index}`
-      UpdateExpressions.push(`mgids.${mgidskeyname}`)
-      ExpressionAttributeNames[mgidskeyname] = global_id
-
-      keys.push(key)
-    })
-    const UpdateExpression = `REMOVE ${UpdateExpressions.join(", ")}`
+  private async getNoteIdsForNoteGlobalIds(PK: string, global_ids: string[]): Promise<Record<string,string>> {
     try {
-      const cmd = new UpdateItemCommand({
-        TableName: TABLE_USER_NOTES,
+      // get the note global_id note_id map item
+      const { Item } = await this.client.send(new GetItemCommand({
+                                            TableName: this.notesTableName,
+                                            Key: marshall({ PK, SK: SK_NGID_NID_MAP})
+                                          }));
+      if (Item) { 
+        const ngids: Record<string,string> = unmarshall(Item).ngids;
+        const map: Record<string,string> = {};
+        global_ids.forEach(gid => {
+          const nid = ngids[gid];
+          if (nid) {
+            map[gid] = nid;
+          }
+        });
+        return map;
+      }
+
+      // if no such item exists then add an empty map
+      await this.client.send(new PutItemCommand({
+        TableName: this.notesTableName,
+        Item: marshall({ PK, SK: SK_NGID_NID_MAP, ngids: {} as Record<string,string> })
+      }));
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+
+    return {};
+  }
+
+  private async getNotesByNoteIds(PK: string, SKs: string[]): Promise<CreateNoteDataOutputItem[]> {
+    const request: BatchGetItemCommandInput = {
+      RequestItems: {
+        [this.notesTableName]: {
+          Keys: SKs.map((SK) => marshall({ PK, SK })),
+        },
+      },
+    };
+
+    try {
+      const { Responses } = await this.client.send(new BatchGetItemCommand({
+        RequestItems: {
+          [this.notesTableName]: {
+            Keys: SKs.map((SK) => marshall({ PK, SK })),
+          },
+        },
+      }));
+      if (Responses && Responses[this.notesTableName]) {
+        const items = Responses[this.notesTableName];
+        return items.map(item => pickExcept(fromNoteDBItem(item),['medias']) as CreateNoteDataOutputItem);
+      }
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+    return [];
+  }
+
+  private async createSingleNote(note: NoteItem): Promise<CreateNoteDataOutputItem> {
+    const cmd = new TransactWriteItemsCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: this.notesTableName,
+            Item: toNoteDBItem(note)
+          }
+        },
+        {
+          Update: {
+            TableName: this.notesTableName,
+            Key: marshall({PK: note.PK, SK: SK_NGID_NID_MAP}),
+            UpdateExpression: `SET ${ATTRIBUTE_NGIDS_MAP}.#key = :value`,
+            ExpressionAttributeNames: {
+              "#key": note.global_id
+            },
+            ExpressionAttributeValues: marshall({
+              ":value": note.SK
+            })
+          }
+        }
+      ]
+    })
+    try {
+      await this.client.send(cmd);
+      return note;
+    }
+    catch(error) {
+      return {
+        ...note,
+        error: convertDynamoDbError(error)
+      }
+    }
+  }
+
+  // get all notes
+
+  public async getNotes(PK: String, limit?: number, pageMark?: string): Promise<GetNotesOutput> {
+    const Limit = Math.min(100,limit || 100); // get upto 100 items
+    try {
+      const {Items,LastEvaluatedKey} = await this.client.send(new QueryCommand({
+        TableName: this.notesTableName,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: marshall({
+          ':pk': PK,
+        }),
+        ProjectionExpression: SHORTNOTEITEM_PROJECTIONS.join(","),
+        Limit,
+        ExclusiveStartKey: pageMark && JSON.parse(decodeBase64(pageMark)),
+        IndexName: 'OrderNoteByCreatedIndex', // use index to use different sort key for ordering
+        ScanIndexForward: false, // false = order desc
+      }));
+      return {
+        notes: Items?.map((Item) => {
+          return fromNoteDBItem(Item) as ShortNoteItem;
+        }) ?? [],
+        limit: Limit,
+        pageMark: LastEvaluatedKey && encodeBase64(JSON.stringify(LastEvaluatedKey)),
+      };
+    }
+    catch(error) {
+      throw convertDynamoDbError(error)
+    }
+  }
+
+  // get note by id
+
+  public async getNoteById(PK: string, SK: string): Promise<NoteItem> {
+    try {
+      const { Item } = await this.client.send(new GetItemCommand({
+        TableName: this.notesTableName,
+        Key: marshall({PK,SK}),
+      }));
+      if (Item) {
+        return fromNoteDBItem(Item) as NoteItem
+      }
+    }
+    catch(error){
+      throw convertDynamoDbError(error);
+    }
+
+    throw newAppErrorBuilder()
+          .setHttpCode(404)
+          .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
+          .addDetails(`note with PK = ${PK} and SK = ${SK} not found`)
+          .setOperational(true)
+          .setRetriable(false)
+          .build();
+  }
+
+  // update notes
+
+  public async updateSingleNote(PK: string, input: UpdateNoteDataInputItem): Promise<UpdateNoteDataOutputItem> {
+    const { SK } = input;
+    const SetExpressions: string[] = [];
+    const ExpressionAttributeValues: Record<string,any> = {
+      ":SK": SK,
+    };
+    SetExpressions.push(`timestamp_modified = :timestamp_modified`);
+    ExpressionAttributeValues[':timestamp_modified'] = input.timestamp_modified;
+    if (input.title) {
+      SetExpressions.push(`title = :title`);
+      ExpressionAttributeValues[':title'] = input.title;
+    }
+    if (input.content) {
+      SetExpressions.push(`content = :content`);
+      SetExpressions.push('short_content = :short_content');
+      ExpressionAttributeValues[':content'] = input.content;
+      ExpressionAttributeValues[':short_content'] = input.short_content;
+    }
+    const UpdateExpression = `SET ${SetExpressions.join(", ")}`;
+
+    try {
+      const { Attributes } = await this.client.send(new UpdateItemCommand({
+        TableName: this.notesTableName,
+        Key: marshall({PK,SK}),
+        UpdateExpression,
+        ConditionExpression: "SK = :SK", // it ensures that update if and only if the item exists
+        ExpressionAttributeValues: marshall(ExpressionAttributeValues),
+        ReturnValues: 'UPDATED_NEW'
+      }));
+      return {
+        SK,
+        ...unmarshall(Attributes!), // TODO: can Attribute be undefined or null even if there is no error
+      };
+    }
+    catch(error) {
+      const dberror = convertDynamoDbError(error);
+      if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) { 
+        throw newAppErrorBuilder()
+              .setHttpCode(404)
+              .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
+              .setRetriable(false)
+              .build()
+      }
+      throw dberror;
+    }
+  }
+
+  // delete notes
+
+  public async deleteMultipleNotes(PK: string, SKs: string[]): Promise<DeleteMultipleNotesDataOutput> {
+    const requests: WriteRequest[] = SKs.map(SK => ({
+                                        DeleteRequest: {
+                                          Key: marshall({PK,SK})
+                                        }
+                                      }));
+    try {                                  
+      const unprocessed: WriteRequest[] = await this.runBatchDeleteNotes(requests);
+      const unsuccessful: string[] = unprocessed.map(({DeleteRequest}) => unmarshall(DeleteRequest!.Key!).SK);
+      return { unsuccessful };
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+  }
+
+  private async runBatchDeleteNotes(requests: WriteRequest[], attempt: number = 1): Promise<WriteRequest[]> {
+    if (attempt === 3) {
+      return requests;
+    }
+    const unprocessed: WriteRequest[] = [];
+    for (let i = 0; i < requests.length; i += 25) {
+      const { UnprocessedItems } = await this.client.send(new BatchWriteItemCommand({
+        RequestItems: {
+          [this.notesTableName]: requests.slice(i,i+25)
+        }
+      }));
+      if (UnprocessedItems && UnprocessedItems[this.notesTableName]) {
+        unprocessed.push(...UnprocessedItems[this.notesTableName]);
+      }
+    }
+    return await this.runBatchDeleteNotes(unprocessed, ++attempt);
+  }
+
+  // add medias
+
+  public async addNoteMedias(PK: string, SK: string, inputs: NoteMediaItem[]): Promise<NoteMediaItem[]> {
+    // get all the note medias
+    const mediaItems: Record<string, NoteMediaItem> = await this.getNoteMedias(PK,SK);
+    const currentMediaCount: number = Object.keys(mediaItems).length;
+
+    // filter medias by media global_id which does not exist
+    const { nonExistingMedias, existingMedias } = await this.filterMedias(inputs,mediaItems);
+
+    if (nonExistingMedias.length > 0) {
+      // adding new medias must not exceed the per note allowed max media count
+      if (currentMediaCount + nonExistingMedias.length > this.maxMediasPerItem) {
+        throw newAppErrorBuilder()
+              .setHttpCode(400)
+              .setCode(DYNAMODB_ERROR_CODES.TOO_MANY_MEDIA_ITEMS)
+              .addDetails({
+                description: "total media count exceeds accepted media count",
+                context: "addNoteMedias",
+              })
+              .setRetriable(false)
+              .build();
+      }
+
+      // update note
+      const newMedias = await this.updateNoteMedias(PK,SK,nonExistingMedias);
+      return [...newMedias, ...existingMedias];
+    }
+
+    // all medias already existing, return those exising medias
+    return [...existingMedias];
+  }
+
+  private async filterMedias(inputs: NoteMediaItem[], mediaItems: Record<string, NoteMediaItem>): Promise<{ existingMedias: NoteMediaItem[]; nonExistingMedias: NoteMediaItem[]; }> {
+    if (Object.keys(mediaItems).length === 0) {
+      return { existingMedias: [], nonExistingMedias: inputs };
+    }
+
+    const nonExistingMedias: NoteMediaItem[] = [];
+    const existingMedias: NoteMediaItem[] = [];
+    inputs.forEach(media => {
+      if (mediaItems[media.media_id]) {
+        existingMedias.push(media);
+      }
+      else {
+        nonExistingMedias.push(media);
+      }
+    });
+
+    return { existingMedias, nonExistingMedias };
+  }
+
+  private async updateNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]> {
+    const UpdateExpressions: string[] = [];
+    const ExpressionAttributeValues: Record<string,any> = {};
+    const ExpressionAttributeNames: Record<string,string> = {};
+    medias.forEach((media,index) => {
+      const mediakeyname = `#mediakey${index}`;
+      const mediavalname = `:mediaval${index}`;
+      UpdateExpressions.push(`medias.${mediakeyname} = ${mediavalname}`);
+      ExpressionAttributeNames[mediakeyname] = encodeBase64(media.global_id);
+      ExpressionAttributeValues[mediavalname] = media;
+    })
+    const UpdateExpression = `SET ${UpdateExpressions.join(", ")}`;
+    try {
+      // no need to check for item exists here. because at this point it is garunteed that the note item exists.
+      const { Attributes } = await this.client.send(new UpdateItemCommand({
+        TableName: this.notesTableName,
         Key: marshall({PK,SK}),
         UpdateExpression,
         ExpressionAttributeNames,
-      })
-      await this.client.send(cmd)
-      
-      // retrun keys with media status AVAILABLE
-      return keys
+        ExpressionAttributeValues: marshall(ExpressionAttributeValues),
+        ReturnValues: 'UPDATED_NEW'
+      }));
+      // TODO: can Attributes be undefined while there is not UpdateItem error occurred?
+      const { medias } = unmarshall(Attributes!);
+      return Object.values(medias) as NoteMediaItem[];
     }
-    catch(error) {
-      console.log(error) // TODO: remove console log
+    catch(error){
+      throw convertDynamoDbError(error);
     }
-    return []
   }
 
-  public async deleteMultipleNotes(PK: string, SKs: string[]): Promise<string[]> {
-    const cmd = new BatchWriteItemCommand({
-      RequestItems: {
-        [TABLE_USER_NOTES]: SKs.map(SK => {
-          return {
-            DeleteRequest: {
-              Key: marshall({PK,SK})
-            }
-          }
-        })
+  // get medias
+
+  public async getNoteMedias(PK: string, SK: string): Promise<Record<string,NoteMediaItem>> {
+    try {
+      const { Items } = await this.client.send(new QueryCommand({
+        TableName: this.notesTableName,
+        KeyConditionExpression: "PK = :PK AND SK = :SK",
+        ExpressionAttributeValues: marshall({
+          ":PK": PK,
+          ":SK": SK
+        }),
+        ProjectionExpression: "medias",
+        Limit: 1,
+      }));
+      if (Items && Items.length > 0) {
+        return unmarshall(Items[0]).medias as Record<string,NoteMediaItem>;
       }
-    })
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+    throw newAppErrorBuilder()
+          .setHttpCode(404)
+          .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
+          .setRetriable(false)
+          .build()
+  }
 
-    const { UnprocessedItems } = await this.client.send(cmd)
-    return UnprocessedItems?.[TABLE_USER_NOTES]?.map(request => unmarshall(request.DeleteRequest!.Key!).SK) || []
-}
+  // update media staus
 
-  private async getNotesByNoteIds(
-    PK: string,
-    SKs: string[],
-    ProjectionExpression?: string,
-    ExpressionAttributeNames?: Record<string, string>
-  ): Promise<PartialNoteItem[]> {
-    const cmd = new BatchGetItemCommand({
-      RequestItems: {
-        [TABLE_USER_NOTES]: {
-          Keys: SKs.map((SK) => marshall({ PK, SK })),
-          ProjectionExpression,
-          ExpressionAttributeNames,
-        },
-      },
+  public async updateMediaStatus(PK: string, SK: string, items: UpdateMediaStatusInputItem[]): Promise<void> {
+    const UpdateExpressions: string[] = [];
+    const ExpressionAttributeNames: Record<string, string> = {
+      '#medias': 'medias',
+      '#status': 'status'
+    };
+    const AttributeValues: Record<string, any> = {
+      ":SK": SK,
+    };
+    items.forEach(({media_id,status}, index) => {
+      const kname = `#mediakey${index}`;
+      const vname = `:mediaval${index}`;
+      UpdateExpressions.push(`#medias.${kname}.#status = ${vname}`);
+      ExpressionAttributeNames[kname] = media_id;
+      AttributeValues[vname] = status;
     });
 
-    const { Responses } = await this.client.send(cmd);
-    return (Responses?.[TABLE_USER_NOTES]?.map(response => unmarshall(response)) || []) as PartialNoteItem[]
+    try {
+      await this.client.send(new UpdateItemCommand({
+        TableName: this.notesTableName,
+        Key: marshall({ PK, SK }),
+        ConditionExpression: "SK = :SK",
+        UpdateExpression: `SET ${UpdateExpressions.join(', ')}`,
+        ExpressionAttributeNames,
+        ExpressionAttributeValues: marshall(AttributeValues),
+      }));
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+  }
+
+  // remove medias
+
+  /**
+   * 
+   * @returns deleted media keys
+   */
+  public async removeNoteMedias(PK: string, SK: string, mediaIds: string[]): Promise<string[]> {
+    try {
+      const UpdateExpressions: string[] = [];
+      const MediasAttributeNames: Record<string,string> = {};
+      mediaIds.forEach((media_id,index) => {
+        const keyname = `#mediakey${index}`;
+        UpdateExpressions.push(`medias.${keyname}`);
+        MediasAttributeNames[keyname] = media_id;
+      });
+      
+      const { Attributes } = await this.client.send(new UpdateItemCommand({
+        TableName: this.notesTableName,
+        Key: marshall({PK,SK}),
+        UpdateExpression: `REMOVE ${UpdateExpressions.join(", ")}`,
+        ExpressionAttributeNames: MediasAttributeNames,
+        ReturnValues: 'UPDATED_OLD'
+      }));
+
+      // return the deleted keys
+      if (Attributes) {
+        const mediaIdSet = new Set<string>(mediaIds);
+        // Attribute contains the medias attribute before delete, not just the delete medias
+        // therefore need to filter Attribute.medias
+        const medias: Record<string,NoteMediaItem> = unmarshall(Attributes).medias;
+        return Object.values(medias).filter(({media_id}) => mediaIdSet.has(media_id)).map(({key}) => key);
+      }
+    }
+    catch(error) {
+      throw convertDynamoDbError(error)
+    }
+
+    // either note by SK or medias by mediaId not found
+    return [];
   }
 }

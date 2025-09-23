@@ -5,7 +5,7 @@ import {
   RequestHandler,
   Response,
 } from 'express';
-import { AppError, createAppErrorItem, newAppErrorBuilder } from '@notes-app/common';
+import { AppError, LOGGER, newAppErrorBuilder } from '@notes-app/common';
 
 type AsyncHandler = (
   req: Request,
@@ -42,8 +42,9 @@ export function notFoundHandler(): RequestHandler {
 export function expressErrorHandler(): ErrorRequestHandler {
   return (error: Error, req: Request, res: Response, next: NextFunction) => {
 
-    console.log(error);
-    const appError = convertToAppError(error);
+    let appError = convertToAppError(error);
+
+    LOGGER.logError(appError.toJSON());
     
     res.status(appError.httpCode);
     res.json({
@@ -51,7 +52,7 @@ export function expressErrorHandler(): ErrorRequestHandler {
       details: appError.details?.map((entry) => entry.description),
     });
 
-    // TODO: check operatiomal flag of AppError and shutdown if required
+    // TODO: check operational flag of AppError and shutdown if required
   };
 }
 
@@ -59,5 +60,14 @@ function convertToAppError(error: Error): AppError {
   if (error instanceof AppError) {
     return error;
   }
-  return new AppError(500,500,[createAppErrorItem(error)],false)
+  return newAppErrorBuilder()
+        .setHttpCode(500)
+        .setCode(500)
+        .addDetails({
+          description: error.message,
+          context: error.name,
+          reason: error,
+        })
+        .setOperational(false)
+        .build()
 }

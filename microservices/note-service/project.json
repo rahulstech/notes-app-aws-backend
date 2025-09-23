@@ -8,13 +8,12 @@
     "build": {
       "executor": "@nx/esbuild:esbuild",
       "outputs": ["{options.outputPath}"],
-      "defaultConfiguration": "production",
+      "defaultConfiguration": "development",
       "options": {
         "platform": "node",
         "outputPath": "dist/microservices/note-service",
         "format": ["cjs"],
         "bundle": false,
-        "main": "microservices/note-service/src/main.ts",
         "tsConfig": "microservices/note-service/tsconfig.app.json",
         "assets": ["microservices/note-service/src/assets"],
         "generatePackageJson": true,
@@ -26,8 +25,11 @@
         }
       },
       "configurations": {
-        "development": {},
+        "development": {
+          "main": "microservices/note-service/src/main.ts"
+        },
         "production": {
+          "main": "microservices/note-service/src/index.ts",
           "esbuildOptions": {
             "sourcemap": false,
             "outExtension": {

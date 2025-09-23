@@ -4,10 +4,10 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "build": "nx build",
-    "start": "node dist/app.js",
-    "dev:note-service": "nx build note-service && node --env-file=.env dist/microservices/note-service/main.js",
-    "dev:queue-service": "nx build queue-service && node --env-file=.env dist/microservices/queue-service/main.js"
+    "build:note-service": "nx run note-service:build:production",
+    "build:queue-service": "nx run queue-service:build:production",
+    "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/main.js",
+    "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js"
   },
   "repository": {
     "type": "git",
@@ -26,8 +26,12 @@
     "@aws-sdk/client-sqs": "^3.873.0",
     "@aws-sdk/s3-request-presigner": "^3.873.0",
     "@aws-sdk/util-dynamodb": "^3.873.0",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
+    "helmet": "^8.1.0",
     "joi": "^18.0.1",
+    "pino": "^9.9.4",
+    "serverless-http": "^4.0.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
@@ -40,14 +44,17 @@
     "@swc-node/register": "~1.9.1",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
+    "@types/aws-lambda": "^8.10.152",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/joi": "^17.2.2",
     "@types/node": "18.16.9",
-    "esbuild": "^0.19.2",
+    "esbuild": "^0.25.9",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
     "jsonc-eslint-parser": "^2.1.0",
     "nx": "21.4.0",
+    "pino-pretty": "^13.1.1",
     "prettier": "^2.6.2",
     "ts-node": "10.9.1",
     "typescript": "^5.9.2",

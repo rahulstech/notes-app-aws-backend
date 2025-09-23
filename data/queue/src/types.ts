@@ -18,3 +18,8 @@ export interface QueueMessage {
   body?: any;
   receipt_handle?: string;
 }
+
+export interface RawQueueMessage {
+  Body?: string;
+  ReceiptHandle?: string;
+}

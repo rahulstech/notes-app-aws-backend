@@ -1,6 +1,8 @@
 node_modules
 dist
 .env
+.env-DEV
+.env-PROD
 
 /tmp
 .nx/cache
@@ -8,3 +10,4 @@ dist
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 /.vscode
+schema/dynamodb_data

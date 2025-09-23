@@ -1,32 +1,34 @@
-import type { NoteItem } from './model/Note';
 import {
-  CreateNoteDataOutput,
+  CreateNoteDataInputItem,
+  CreateNoteDataOutputItem,
+  DeleteMultipleNotesDataOutput,
+  GetNotesOutput,
+  NoteItem,
   NoteMediaItem,
-  NoteMediaStatus,
-  ShortNoteItem,
-  UpdateNoteDataInput,
-  UpdateNoteDataOutput,
+  UpdateMediaStatusInputItem,
+  UpdateNoteDataInputItem,
+  UpdateNoteDataOutputItem,
 } from './types';
 
 export interface NoteDataService {
 
-  createMultipleNotes(PK: string, notes: NoteItem[]): Promise<CreateNoteDataOutput>;
+  createMultipleNotes(PK: string, inputs: CreateNoteDataInputItem[]): Promise<CreateNoteDataOutputItem[]>;
 
-  getNotes(PK: String): Promise<ShortNoteItem[]>;
+  getNotes(PK: String, limit: number, pageMark?: string): Promise<GetNotesOutput>;
 
-  getNoteById(PK: string, SK: string): Promise<NoteItem | null>;
+  getNoteById(PK: string, SK: string): Promise<NoteItem>;
 
-  getNoteMediasByKeys(PK: string, SK: string, keys: string[]): Promise<NoteMediaItem[]>
+  updateSingleNote(PK: string, input: UpdateNoteDataInputItem): Promise<UpdateNoteDataOutputItem>;
 
-  updateMultipleNotes(PK: string, inputs: UpdateNoteDataInput[]): Promise<UpdateNoteDataOutput>;
+  deleteMultipleNotes(PK: string, SKs: string[]): Promise<DeleteMultipleNotesDataOutput>;
 
-  updateMediaStatus(PK: string,SK: string,items: Pick<NoteMediaItem,'global_id'|'key'|'status'>[]): Promise<void>;
+  updateMediaStatus(PK: string,SK: string,items: UpdateMediaStatusInputItem[]): Promise<void>;
 
   addNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]>
 
-  removeNoteMedias(PK: string, SK: string, keyGids: Pick<NoteMediaItem,'global_id'|'key'>[]): Promise<string[]>
+  // getNoteMediasByKeys(PK: string, SK: string, keys: string[]): Promise<NoteMediaItem[]>
 
-  deleteMultipleNotes(PK: string, SKs: string[]): Promise<string[]>;
+  getNoteMedias(PK: string, SK: string): Promise<Record<string,NoteMediaItem>>
 
-  createNoteId(): string;
+  removeNoteMedias(PK: string, SK: string, gids: string[]): Promise<string[]>
 }

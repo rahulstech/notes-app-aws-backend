@@ -9,34 +9,45 @@ import {
   CreateNotesInput,
   CreateNotesOutput,
   GetNoteInput,
-  GetNoteOutput,
   GetNotesInput,
   GetNotesOutput,
   UpdateNotesInput,
   UpdateNotesOutput,
   DeleteNotesInput,
-  CreateNoteItemInput,
   AddMediasInput,
   AddMediasOutput,
   RemoveMediasInput,
   RemoveMediasOutput,
   UpdateMediaStatusInput,
-  AddMediaInputItem,
-  AddMediaOutputItem,
+  DeleteNotesOutput,
+  UpdateMediaStatusOutput,
+  AddMediaItemOutput,
+  DeleteMediasByKeyInput,
+  DeleteMediasByKeyOutput,
+  DeleteMediasByPrefixInput,
+  DeleteMediasByPrefixOutput,
+  GetMediaUploadUrlInput,
+  GetMediaUploadUrlOutput,
+  GetNoteOutput,
+  GetMediaUploadUrlItemOutput,
+  UpdateNoteItemOutput,
+  CreateNoteItemOutput,
 } from '../types';
 import {
+  CreateNoteDataInputItem,
+  DYNAMODB_ERROR_CODES,
   NoteDataService,
   NoteItem,
   NoteMediaItem,
   NoteMediaStatus,
-  ShortNoteItem,
-  UpdateNoteDataInput,
 } from '@notes-app/database-service';
 import { NoteObjectService } from '@notes-app/storage-service';
-import { createNoteMediaKey, noteItemToNoteItemOutput, noteItemToNoteItemOutputList, shortNoteItemToNoteItemOutputList } from '../utils';
-import { AppError, decodeBase64, renameKeys } from '@notes-app/common';
+import { createNoteMediaKey, createNoteShortContent, noteItemToNoteItemOutput, shortNoteItemToNoteItemOutputList } from '../helpers';
+import { AppError, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
+import { convertNoteRepositoryError, convertToErrorItemOutput, NOTE_REPOSITORY_ERROR_CODES } from '../errors';
 
-const NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS = 3600 // 1 hour
+const NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS = 3600; // 1 hour
+const LOG_TAG = 'NoteRepositoryImpl';
 
 export interface NoteRespositoryOptions {
   databaseService: NoteDataService;
@@ -55,243 +66,387 @@ export class NoteRepositoryImpl implements NoteRepository {
     this.queue = options.queueService;
   }
 
-  public async createNotes(inputs: CreateNotesInput): Promise<CreateNotesOutput> {
-    const { user_id: PK, notes } = inputs;
+  // create notes 
 
-    // prepare note items to create which does not exists
-    const noteItems = this.convertCreateNoteItemInputs(PK,notes)
+  public async createNotes(input: CreateNotesInput): Promise<CreateNotesOutput> {
+    const { PK, inputs } = input;
 
-    // create note items
-    const { items, error } = await this.db.createMultipleNotes(PK, noteItems);
+    // create NoteItems from inputs
+    const inputItems: CreateNoteDataInputItem[] = inputs.map((input) => ({
+      PK,
+      ...input,
+      short_content: createNoteShortContent(input.content),
+    }));
 
-    const output: CreateNotesOutput = { error }
-    if (items) {
-      output.notes = noteItemToNoteItemOutputList(items)
-    }
-    return output
-  }
-
-  private convertCreateNoteItemInputs(PK: string, input: CreateNoteItemInput[]): NoteItem[] {
-    return input.map(
-      ({
-        global_id,
-        title,
-        content,
-        timestamp_created,
-        timestamp_modified
-      }) => {
-        const SK = this.db.createNoteId();
-        const short_content = NoteItem.createShortContent(content)
-        return new NoteItem(
-          PK,
-          SK,
-          global_id,
-          title,
-          content,
-          short_content,
-          timestamp_created,
-          timestamp_modified
-        );
+    try {
+      // create note items
+      const outputs = await this.db.createMultipleNotes(PK, inputItems);
+      if (outputs.length > 0) {
+        return { 
+          notes: outputs.map(item => {
+            const error = item.error;
+            const output = noteItemToNoteItemOutput(item as NoteItem);
+            if (error) {
+              return {
+                ...output,
+                error: convertToErrorItemOutput(error),
+              }
+            }
+            return output as CreateNoteItemOutput;
+          }) 
+        }
       }
-    )
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('createNotes',error);
+    }
+
+    // no items created due to db data service error
+    throw newAppErrorBuilder()
+          .setHttpCode(500)
+          .setCode(NOTE_REPOSITORY_ERROR_CODES.CREATE_NOTES_FAILED)
+          .build();
   }
+
+  // get note
 
   public async getNote(input: GetNoteInput): Promise<GetNoteOutput> {
-    const item: NoteItem | null = await this.db.getNoteById(
-      input.user_id,
-      input.note_id,
-    );
-    return {
-      note: item == null ? null : noteItemToNoteItemOutput(item)
-    };
+    const { PK, SK } = input;
+    try {
+      const item = await this.db.getNoteById(PK,SK);
+      return {
+        note: noteItemToNoteItemOutput(item),
+      }
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('getNote',error);
+    }
   }
 
+  // get notes
+  
   public async getNotes(input: GetNotesInput): Promise<GetNotesOutput> {
-    const items: ShortNoteItem[] = await this.db.getNotes(input.user_id);
-    return {
-      notes: shortNoteItemToNoteItemOutputList(items),
-    };
+    const { PK, limit, pageMark } = input;
+    try {
+      const output = await this.db.getNotes(PK,limit,pageMark);
+      const notes = shortNoteItemToNoteItemOutputList(output.notes);
+      return {
+        limit: output.limit,
+        count: notes.length,
+        pageMark: output.pageMark,
+        notes,
+      };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError("getNotes", error);
+    }
   }
+
+  // update notes
 
   public async updateNotes(input: UpdateNotesInput): Promise<UpdateNotesOutput> {
-    const { user_id: PK, notes } = input
-
-    const updateInputs: UpdateNoteDataInput[] = notes.map(note => 
-      renameKeys(note,{ "note_id": "SK"}) as UpdateNoteDataInput
-    )
-
-    // update db items
-    const { items, fail, error } = await this.db.updateMultipleNotes(PK,updateInputs)
-    
-    
-    const output: UpdateNotesOutput = { error }
-    if (items) {
-      output.notes = noteItemToNoteItemOutputList(items)
+    const { PK, inputs } = input;
+    try {
+      // update db items
+      const outputs: UpdateNoteItemOutput[] = await executeBatch(
+        inputs,
+        async (input) => {
+          if (input.content && !input.short_content) {
+            input.short_content = createNoteShortContent(input.content);
+          }
+          try {
+            const updateOutput = await this.db.updateSingleNote(PK,input);
+            return renameKeys(updateOutput,{'SK':'note_id'});
+          }
+          catch(error) {
+            return {
+              ...renameKeys(input,{'SK':'note_id'}),
+              error: convertToErrorItemOutput(error as AppError),
+            }
+          }
+        },
+        25,
+        100
+      );
+      return { outputs };
     }
-    return output
+    catch(error) {
+      throw convertNoteRepositoryError('updateNotes',error);
+    }
   }
+
+  // delete notes
+
+  public async deleteNotes(input: DeleteNotesInput): Promise<DeleteNotesOutput> {
+    const { PK, SKs } = input
+    if (SKs.length == 0) {
+      return {};
+    }
+
+    try {
+      const { unsuccessful } = await this.db.deleteMultipleNotes(PK,SKs);
+      const unsuccessfulSet = new Set(unsuccessful ?? []);
+      const prefix = SKs
+        .filter(SK => !unsuccessfulSet.has(SK))
+        .map(SK => createNoteMediaKey({ user_id: PK, note_id: SK }));
+
+      this.enqueuDeleteNotesMessage(prefix);
+
+      return { unsuccessful };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('deleteNotes', error);
+    }
+  }
+
+  private async enqueuDeleteNotesMessage(prefixes: string[]): Promise<void> {
+    if (prefixes.length == 0) return;
+
+    const message: QueueMessage = {
+      source_type: QueueMessageSourceType.NOTE_SERVICE,
+      event_type: QueueMessageEventType.DELETE_NOTES,
+      body: { prefixes },
+    };
+
+    await this.queue.enqueueMessage(message);
+  }
+
+  /* NoteMedia related method */
+
+  // add media
 
   public async addMedias(input: AddMediasInput): Promise<AddMediasOutput> {
-    const { user_id: PK, note_medias } = input
+    const { PK, inputs } = input;
 
-    const outputs = await Promise.all(Object.entries(note_medias).map(async ([SK,media_inputs]) => {
-      try {
-        const medias = await this.addMediasForNote(PK,SK,media_inputs)
-        return { medias }
-      }
-      catch(error) {
-        console.log(error) // TODO: remove log
-        return { error: new AppError(0) }
-      }
-    }))
+    // save new note medias in db
+    try {
+      const outputs = await executeBatch(
+        inputs,
+        async ({SK,medias}) => {
+          try {
+            const mediaInputs = medias.map(media => this.convertToNoteMediaItem(PK,SK,media));
+            const mediaItems = await this.db.addNoteMedias(PK,SK,mediaInputs);
+            return { 
+              note_id: SK, 
+              medias: mediaItems.map(media => pickExcept(media,['status'])) 
+            };
+          }
+          catch(error) {
+            return {
+              note_id: SK,
+              error:  convertToErrorItemOutput(error as AppError)
+            };
+          }
+        },
+        12,
+        100
+      );
+      return { outputs: outputs as AddMediaItemOutput[] };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('addMedias',error);
+    }
+  }
 
-    return outputs.reduce<AddMediasOutput>((acc,{medias,error}) => {
-      if (medias) {
-        if (!acc.medias) {
-          acc.medias = []
+  private convertToNoteMediaItem(PK: string, SK: string, input: Pick<NoteMediaItem,'global_id'|'type'|'size'>): NoteMediaItem {
+    const { global_id, type, size } = input;
+    const key = createNoteMediaKey({ user_id: PK, note_id: SK, media_id: global_id });
+    return {
+      media_id: encodeBase64(global_id),
+      global_id,
+      key,
+      url: this.storage.getMediaUrl(key),
+      type,
+      size,
+      status: NoteMediaStatus.NOT_AVAILABLE,
+    };
+  }
+
+  // get media
+
+  public async getMediaUploadUrl(input: GetMediaUploadUrlInput): Promise<GetMediaUploadUrlOutput> {
+    const { PK, inputs } = input;
+    try {
+      const outputs = await executeBatch(inputs,async ({SK,media_ids}) => {
+        try {
+          return await this.generateMediaUploadUrls(PK,SK,media_ids);
         }
-        acc.medias = acc.medias.concat(medias)
-      }
-      return acc
-    },{})
+        catch(error) {
+          return {
+            note_id: SK,
+            media_ids,
+            error: convertToErrorItemOutput(error as AppError)
+          }
+        }
+      },
+      4,
+      100);
+      return { outputs };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('getMediaUploadUrls',error);
+    }
   }
 
-  private async addMediasForNote(PK: string, SK: string, mediaInputs: AddMediaInputItem[]): Promise<AddMediaOutputItem[]> {
-    const itemsExists: NoteMediaItem[] = []
-    const itemsNonExists: NoteMediaItem[] = []
-    mediaInputs.forEach(({global_id,type,size,key: existing_key}) => {
-      const key = existing_key ?? createNoteMediaKey(PK,SK,global_id);
-      const item = {
-        global_id,
-        key,
-        url: this.storage.getMediaUrl(key),
-        type,
-        size,
-        status: NoteMediaStatus.NOT_AVAILABLE,
-      }
-      if (existing_key) {
-        itemsExists.push(item)
-      }
-      else {
-        itemsNonExists.push(item)
-      }
-    })
-
-    let itemsForKey: NoteMediaItem[] = itemsExists
-    // add media entries if any non-exists
-    if (itemsNonExists.length > 0) {
-      const newItems = await this.db.addNoteMedias(PK,SK,itemsNonExists)
-      itemsForKey = [ ...itemsExists, ...newItems ]
+  private async generateMediaUploadUrls(PK: string, SK: string, media_ids: string[]): Promise<GetMediaUploadUrlItemOutput> {
+    const medias: Record<string,NoteMediaItem> = await this.db.getNoteMedias(PK,SK);
+    const filterd = media_ids
+                    .filter(media_id => medias[media_id] && medias[media_id].status === NoteMediaStatus.NOT_AVAILABLE)
+                    .map(media_id => medias[media_id]);
+    if (filterd.length === 0) {
+      throw newAppErrorBuilder()
+            .setHttpCode(404)
+            .setCode(DYNAMODB_ERROR_CODES.MEDIA_ITEM_NOT_FOUND)
+            .addDetails('no media found by the given media ids')
+            .setRetriable(false)
+            .build()
     }
-    if (itemsForKey.length === 0) {
-      return []
-    }
-
-    // generate upload urls for each new medias
-    const { medias } = await this.generateMediaUploadUrls(itemsForKey)
-    return medias || []
-  }
-
-  private async generateMediaUploadUrls(medias: NoteMediaItem[]): Promise<AddMediasOutput> {
-    const outputs = await Promise.all(medias.map(async (mediaOutput) => {
-      const {key,type: mime_type,size} = mediaOutput
+    const urls = await Promise.all(filterd.map(async ({media_id,key,type,size}) => { 
       try {
-        const urlOutput = await this.storage.getObjectUploadUrl({
+        const output = await this.storage.getObjectUploadUrl({
           key,
-          mime_type,
+          mime_type: type,
           size,
           expires_in: NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS
-        })
-        return { media: { ...mediaOutput, ...urlOutput }, suceessful: true }
-      }
-      catch(error) {
-        return { media: mediaOutput, suceessful: false, error: error as AppError }
-      }
-    }))
-
-    const output: AddMediasOutput = {}
-    outputs.forEach(({media,suceessful}) => {
-      if (!output.medias) {
-        output.medias = []
-      }
-      output.medias.push(media)
-      if (!suceessful) {
-        if (!output.failure) {
-          output.failure = []
+        });
+        return {
+          media_id,
+          ...output,
         }
-        output.failure.push(media.global_id)
-      }
-    })
-
-    return output
-  }
-
-  public async updateMediaStatus(input: UpdateMediaStatusInput): Promise<void> {
-    const { user_id: PK, medias } = input
-
-    const promises = Object.keys(medias).map(async (SK) => {
-      const items = medias[SK].map(item => ({
-        ...item,
-        global_id: this.getMediaGlobalIdFromKey(item.key)
-      }))
-      try {
-        await this.db.updateMediaStatus(PK,SK,items)
       }
       catch(error) {
-        console.log(error) // TODO: remove log
+        return { 
+          media_id 
+        }
       }
-    })
-
-    await Promise.all(promises)
+    }));
+    return { note_id: SK, urls };
   }
+
+  // update media
+
+  public async updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput> {
+    const { PK, inputs } = input;
+    try {
+      const items = (await executeBatch(
+          Object.entries(inputs),
+          async ([SK,status]) => {
+            try {
+              await this.db.updateMediaStatus(PK,SK,status);
+              return status;
+            }
+            catch(error) {
+              const dberror = error as AppError;
+              if (!dberror.retriable) {
+                return status;
+              }
+            }
+            return [];
+          },
+          25,
+          100
+        )
+      ).flat();
+      return { items };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('updateMediaStatus',error);
+    }
+  }
+
+  // delete media
 
   public async removeMedias(input: RemoveMediasInput): Promise<RemoveMediasOutput> {
-    const { user_id: PK, note_medias } = input
-    const outputs = await Promise.all(Object.entries(note_medias).map(async ([SK,keyGids]) => {
-      try {
-        const keys = await this.db.removeNoteMedias(PK,SK,keyGids)
-        return { keys }
-      }
-      catch(error) {
-        console.log(error) // TODO: remove log
-        return { SK, failure: keyGids }
-      }
-    }))
+    const { PK, inputs } = input;
+    try {
+      const outputs = await executeBatch(
+        inputs, 
+        async ({SK,media_ids})=>{
+          try {
+            const keys = await this.db.removeNoteMedias(PK,SK,media_ids)
+            return { keys }
+          }
+          catch(error) {
+            LOGGER.logInfo(error, `${LOG_TAG}#removeMedias`);
+            const dberror = error as AppError;
+            // TODO: add error to return
+            if (dberror.retriable) {
+              return { 
+                SK,
+                media_ids,
+              }
+            }
+          }
+          return { keys: [] };
+        },
+        25,
+        100
+      );
 
-    const output: RemoveMediasOutput = {}
-    let allKeys: string[] = []
-
-    outputs.forEach(({keys,SK,failure}) => {
-      if (keys) {
-        allKeys = allKeys.concat(keys)
-      }
-      else {
-        if (!output.failure) {
-          output.failure = {}
+      const allKeys: string[] = [];
+      const allUnsuccessful: { SK: string, media_ids: string[] }[] = [];
+      outputs.forEach(({SK,keys,media_ids})=>{
+        if (keys) {
+          allKeys.push(...keys);
         }
-        output.failure[SK] = failure
+        else {
+          allUnsuccessful.push({ SK, media_ids });
+        }
+      });
+
+      // enqueue a message to delete the media objects
+      await this.enqueuDeleteMediasMessage(allKeys);
+
+      return {
+        unsuccessful: allUnsuccessful.length > 0 ? allUnsuccessful : undefined,
       }
-    })
-
-    await this.enqueuDeleteMediasMessage(allKeys)
-
-    return output
+    }
+    catch(error) {
+      throw convertNoteRepositoryError('removeMedias',error);
+    }
   }
 
-  public async deleteNotes(input: DeleteNotesInput): Promise<void> {
-    const { user_id, note_ids } = input
-    const noteIdsNotDeleted: string[] = await this.db.deleteMultipleNotes(
-      user_id,
-      note_ids
-    );
-
-    let successfullyDeleteIds = note_ids
-    if (noteIdsNotDeleted.length > 0) {
-      const set = new Set(noteIdsNotDeleted)
-      successfullyDeleteIds = noteIdsNotDeleted.filter(id => !set.has(id))
+  public async deleteMediasByKey(input: DeleteMediasByKeyInput): Promise<DeleteMediasByKeyOutput> {
+    const { keys } = input;
+    try {
+      const unsuccessful = await this.storage.deleteMultipleObjects(keys);
+      return { unsuccessful };
     }
+    catch(error) {
+      throw convertNoteRepositoryError('deleteMediasByKey',error);
+    }
+  }
 
-    await this.enqueuDeleteNotesMessage(user_id,successfullyDeleteIds);
+  public async deleteMediasByPrefixes(input: DeleteMediasByPrefixInput): Promise<DeleteMediasByPrefixOutput> {
+    const { prefixes, extras } = input;
+    const outputs = await executeBatch(prefixes,
+      async (prefix) => {
+        try {
+          await this.storage.deleteObjectByPrefix(prefix);
+          return null;
+        }
+        catch(error) {
+          const err = error as AppError;
+          if (!err.operational) {
+            throw err;
+          }
+          else {
+            LOGGER.logInfo(error,{ tag: `${LOG_TAG}#deleteMediasByPrefies`, prefix });
+          }
+        }
+        return prefix;
+    }, 
+    25, 
+    100);
+    // return (await Promise.all(
+    //   prefixes.map(async (prefix) => {
+        
+    //   }))
+    // ).filter(v => v !== null)
+    return { 
+      unsuccessful: outputs.filter(item => null !== item),
+      extras
+    }
   }
 
   private async enqueuDeleteMediasMessage(keys: string[]): Promise<void> {
@@ -305,22 +460,4 @@ export class NoteRepositoryImpl implements NoteRepository {
 
     await this.queue.enqueueMessage(message);
   }
-
-  private async enqueuDeleteNotesMessage(PK: string, SKs: string[]) {
-    if (SKs.length == 0) return;
-
-    const message: QueueMessage = {
-      source_type: QueueMessageSourceType.NOTE_SERVICE,
-      event_type: QueueMessageEventType.DELETE_NOTES,
-      body: { prefixes: SKs.map(SK => createNoteMediaKey(PK,SK)) },
-    };
-
-    await this.queue.enqueueMessage(message);
-  }
-
-  private getMediaGlobalIdFromKey(key: string): string {
-    const paths = key.split('/')
-    const enc_gid = paths[paths.length-1]
-    return decodeBase64(enc_gid)
-  } 
 }

@@ -5,5 +5,5 @@
     "module": "commonjs",
     "types": ["node", "express", "joi"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../../domain/note-repository/src/impl/NoteRepositoryFactoryImpl.ts"]
 }

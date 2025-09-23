@@ -3,7 +3,13 @@ import {
   AddMediasOutput,
   CreateNotesInput,
   CreateNotesOutput,
+  DeleteMediasByKeyInput,
+  DeleteMediasByKeyOutput,
+  DeleteMediasByPrefixInput,
   DeleteNotesInput,
+  DeleteNotesOutput,
+  GetMediaUploadUrlInput,
+  GetMediaUploadUrlOutput,
   GetNoteInput,
   GetNoteOutput,
   GetNotesInput,
@@ -11,11 +17,14 @@ import {
   RemoveMediasInput,
   RemoveMediasOutput,
   UpdateMediaStatusInput,
+  UpdateMediaStatusOutput,
   UpdateNotesInput,
   UpdateNotesOutput,
 } from './types';
 
 export interface NoteRepository {
+
+  /* Note related methods */
 
   createNotes(inputs: CreateNotesInput): Promise<CreateNotesOutput>;
 
@@ -23,13 +32,23 @@ export interface NoteRepository {
 
   getNotes(input: GetNotesInput): Promise<GetNotesOutput>;
 
+  // getMediaKeysByPrefix(prefix: string): Promise<string[]>;
+
   updateNotes(input: UpdateNotesInput): Promise<UpdateNotesOutput>;
+
+  deleteNotes(input: DeleteNotesInput): Promise<DeleteNotesOutput>;
+
+  /* NoteMedia related methods */
 
   addMedias(input: AddMediasInput): Promise<AddMediasOutput>;
 
-  updateMediaStatus(input: UpdateMediaStatusInput): Promise<void>
+  getMediaUploadUrl(input: GetMediaUploadUrlInput): Promise<GetMediaUploadUrlOutput>
+
+  updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput>
 
   removeMedias(input: RemoveMediasInput): Promise<RemoveMediasOutput>;
 
-  deleteNotes(input: DeleteNotesInput): Promise<void>;
+  deleteMediasByKey(input: DeleteMediasByKeyInput): Promise<DeleteMediasByKeyOutput>;
+
+  deleteMediasByPrefixes(input: DeleteMediasByPrefixInput): Promise<DeleteMediasByKeyOutput>;
 }

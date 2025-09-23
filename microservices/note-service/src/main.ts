@@ -1,33 +1,25 @@
-import type { Express } from 'express';
-import express from 'express';
-import notesRouter from './router/NotesRouter';
-import { installNoteRepository } from './middleware/Services';
-import { expressErrorHandler, notFoundHandler } from './middleware/Error';
+import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
+import { createNoteExpressApp } from "./app";
+import { NoteExpressAppConfiguration } from "./types";
+import { ENVIRONMENT, LOGGER } from "@notes-app/common";
+import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
+import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
+import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
 
-const app: Express = express();
+const { NOTE_SERVICE_SERVER_PORT } = ENVIRONMENT;
 
-/////////////////////////////////////////////////
-///             MiddleWares                 ///
-///////////////////////////////////////////////
+const config: NoteExpressAppConfiguration = {
+  noteRepositoryFactory: new NoteRepositoryFactoryImpl(
+                          new NoteDataServiceFactoryImpl(),
+                          new NoteObjectServiceFactoryImpl(),
+                          new NoteQueueServiceFactoryImpl()
+                        ),
+}
 
-app.use(express.json());
+const app = createNoteExpressApp(config);
 
-app.use(installNoteRepository());
+const PORT = NOTE_SERVICE_SERVER_PORT || 3000;
 
-/////////////////////////////////////////////////
-///                 Routers                  ///
-///////////////////////////////////////////////
-
-app.use('/notes', notesRouter);
-
-/////////////////////////////////////////////////
-///              Error Handler               ///
-///////////////////////////////////////////////
-
-app.use(notFoundHandler());
-
-app.use(expressErrorHandler());
-
-app.listen(3000, () => {
-  console.log('server started');
+app.listen(PORT, () => {
+  LOGGER.logInfo(`server running http://localhost:${PORT}`);
 });

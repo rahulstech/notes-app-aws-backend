@@ -3,12 +3,10 @@ import { ObjectUploadUrlInput, ObjectUploadUrlOutput } from "./types";
 export interface NoteObjectService {
 
   getObjectUploadUrl(input: ObjectUploadUrlInput): Promise<ObjectUploadUrlOutput>;
-
-  getKeysByPrefix(prefix: string): Promise<string[]>
   
   deleteMultipleObjects(keys: string[]): Promise<string[]>;
 
-  createMediaObjectKey(...path: string[]): string;
+  deleteObjectByPrefix(prefix: string): Promise<void>
 
   getMediaUrl(key: string): string;
 }

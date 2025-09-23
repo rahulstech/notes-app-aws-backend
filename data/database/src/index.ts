@@ -1,4 +1,9 @@
 export * from './NoteDataService';
-export * from './model/Note';
-export * from './types';
+export * from './NoteDataServiceFactory';
 export * from './impl/NoteDynamoDbDataService';
+export * from './impl/NoteDataServiceFactoryImpl';
+export * from './types';
+export * from './errors';
+export * from './helpers';
+
+
