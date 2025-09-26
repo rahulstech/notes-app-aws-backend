@@ -10,18 +10,18 @@ function convertValidationErrorToAppError(error: any): AppError {
   const builder = newAppErrorBuilder()
   if (error instanceof ValidationError) {
     const details = error.details.map(({ message, context }) => ({ description: message, context: context?.key }));
-    builder.setDetails(details).build()
+    builder.setDetails(details);
   }
   else if (typeof error === 'string') {
-    builder.addDetails({ description: error, context: 'validate' }).build()
+    builder.addDetails({ description: error, context: 'validate' });
   }
   else if (error instanceof Error) {
-    builder.addDetails({ description: error.message, context: `validate - ${error.name}` }).build()
+    builder.addDetails({ description: error.message, context: error.name, reason: error });
   }
   else {
-    builder.addDetails({ description: 'unknown', context: 'validate' }).build()
+    builder.addDetails({ description: 'unknown validate error', context: 'validate', reason: error });
   }
-  return builder.build()
+  return builder.build();
 }
 
 export type ValidationRule = Schema | object;

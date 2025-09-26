@@ -1,5 +1,20 @@
 import { STATUS_CODES } from "node:http";
 
+export const APP_ERROR_CODE = {
+    NOT_FOUND: 6001,
+    INTERNAL_SERVER_ERROR: 6002,
+    NOT_IMPLEMENTED: 6003,
+    BAD_REQUEST: 6004,
+    UNAUTHORIZED: 6005,
+    FORBIDDEN: 6006,
+    CONFLICT: 6007,
+    PRECONDITION_FAILED: 6008,
+    TOO_MANY_REQUESTS: 6009,
+    SERVICE_UNAVAILABLE: 6010,
+    LIMIT_EXCEEDED: 6011,
+    INCORRECT_INPUT: 6012,
+};
+
 export interface AppErrorItem {
     description: string;
     context?: string;

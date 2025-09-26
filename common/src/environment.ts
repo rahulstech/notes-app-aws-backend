@@ -6,6 +6,7 @@ const ENV_RULES = Joi.object({
     NODE_ENV: Joi.string().valid('dev','prod','test').default('dev'),
     LOG_LEVEL: Joi.string().valid('debug','info','warn','error','fatal').default('info'),
     NOTE_SERVICE_SERVER_PORT: Joi.number().default(3000),
+    AUTH_SERVICE_SERVER_PORT: Joi.number().default(4000),
 
     // AWS
     AWS_ACCESS_KEY_ID: Joi.string().required(),
@@ -24,6 +25,11 @@ const ENV_RULES = Joi.object({
     DYNAMODB_REGION: Joi.string(),
     DYNAMODB_LOCAL_ENDPOINT_URL: Joi.string().uri(),
     DYNAMODB_NOTES_TABLE: Joi.string().required(),
+
+    // Cognito
+    COGNITO_REGION: Joi.string().required(),
+    COGNITO_CLIENT_ID: Joi.string().required(),
+    COGNITO_USER_POOL_ID: Joi.string().required(),
 
     // Limits
     MAX_BATCH_CREATE_NOTE_COUNT: Joi.number().default(25),

@@ -7,7 +7,8 @@
     "build:note-service": "nx run note-service:build:production",
     "build:queue-service": "nx run queue-service:build:production",
     "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/main.js",
-    "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js"
+    "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js",
+    "dev:auth-service": "nx build auth-service && node --env-file=.env-DEV dist/microservices/auth-service/main.js"
   },
   "repository": {
     "type": "git",
@@ -21,6 +22,7 @@
   "homepage": "https://github.com/rahulstech/notes-app-aws-backend#readme",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.894.0",
     "@aws-sdk/client-dynamodb": "^3.873.0",
     "@aws-sdk/client-s3": "^3.873.0",
     "@aws-sdk/client-sqs": "^3.873.0",

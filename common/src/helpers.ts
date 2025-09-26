@@ -19,9 +19,19 @@ export function renameKeys(target: Record<string,any>, nameMap: Record<string,st
     return output;
 }
 
+export function pickOnly(obj: Record<string, any>, keys: string[]): Record<string, any> {
+    const result: Record<string, any> = {};
+    for (const key of keys) {
+      if (obj[key]) {
+        result[key] = { ...obj[key] };
+      }
+    }
+    return result;
+  }
+
 export function pickExcept(src: Record<any,any> | any[], exclude: any[]): Record<any,any> | any[] {
     if (Array.isArray(src)) {
-        return pickExceptionArray(src,exclude)
+        return pickExceptArray(src,exclude)
     }
     else {
         return pickExceptRecord(src,exclude);
@@ -38,7 +48,7 @@ function pickExceptRecord(src: Record<string,any>, exclude: any[]): Record<any,a
     return output
 }
 
-function pickExceptionArray(src: any[], exclude: any[]): any[] {
+function pickExceptArray(src: any[], exclude: any[]): any[] {
     const output = new Set(src);
     exclude.forEach(item => output.delete(item));
     return [...output.values()];
