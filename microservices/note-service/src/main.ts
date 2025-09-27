@@ -18,7 +18,7 @@ const config: NoteExpressAppConfiguration = {
 
 const app = createNoteExpressApp(config);
 
-const PORT = NOTE_SERVICE_SERVER_PORT || 3000;
+const PORT = NOTE_SERVICE_SERVER_PORT;
 
 app.listen(PORT, () => {
   LOGGER.logInfo(`server running http://localhost:${PORT}`);

@@ -173,7 +173,15 @@ export class CognitoAuthServiceImpl implements AuthService {
                 expiresAt: this.calculateExpiresAt(AuthenticationResult?.ExpiresIn!),
             };
         } catch (error) {
-            throw convertCognitoError(error);
+            const cognitoerror = convertCognitoError(error);
+            if (cognitoerror.code === AUTH_SERVICE_ERROR_CODE.NOT_AUTHORIZED) {
+                throw newAppErrorBuilder()
+                        .setHttpCode(401)
+                        .setCode(AUTH_SERVICE_ERROR_CODE.INVALID_CREDENTIALS)
+                        .addDetails("incorrect username and/or password")
+                        .build()
+            }
+            throw cognitoerror;
         }
     }
 

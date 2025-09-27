@@ -17,6 +17,7 @@ import {
   CreateNoteDataInputItem,
   CreateNoteDataOutputItem,
   DeleteMultipleNotesDataOutput,
+  GetNoteIdsOutput,
   GetNotesOutput,
   NoteItem,
   NoteMediaItem,
@@ -253,6 +254,35 @@ export class NoteDynamoDbDataService implements NoteDataService {
     }
     catch(error) {
       throw convertDynamoDbError(error)
+    }
+  }
+
+  public async getNoteIds(PK: string, limit: number, pageMark?: string): Promise<GetNoteIdsOutput> {
+    try {
+      const {Items,LastEvaluatedKey} = await this.client.send(new QueryCommand({
+        TableName: this.notesTableName,
+        KeyConditionExpression: "PK = :PK",
+        ExpressionAttributeValues: marshall({
+          ":PK": PK,
+        }),
+        ProjectionExpression: "SK",
+        Limit: limit,
+        ExclusiveStartKey: pageMark && JSON.parse(decodeBase64(pageMark)),
+      }));
+      if (Items) {
+        return {
+          SKs: Items.map(item => unmarshall(item).SK),
+          limit,
+          pageMark: LastEvaluatedKey && encodeBase64(JSON.stringify(LastEvaluatedKey)),
+        }
+      }
+    }
+    catch(error) {
+      throw convertDynamoDbError(error);
+    }
+    return {
+      SKs: [],
+      limit,
     }
   }
 

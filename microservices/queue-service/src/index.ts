@@ -3,9 +3,9 @@ import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
 import { NoteQueueServiceFactoryImpl, QueueMessage, QueueMessageEventType } from "@notes-app/queue-service";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
-import { App } from "./app";
 import { EventHandler } from "./types";
 import { buildEventHandlerRegistry } from "./eventhandler";
+import { App } from "./app";
 
 // ----------------------
 // Setup (cold start init)

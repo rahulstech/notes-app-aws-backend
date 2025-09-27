@@ -32,6 +32,8 @@ import {
   GetMediaUploadUrlItemOutput,
   UpdateNoteItemOutput,
   CreateNoteItemOutput,
+  GetNoteIdsOutput,
+  GetNoteIdsInput,
 } from '../types';
 import {
   CreateNoteDataInputItem,
@@ -43,7 +45,7 @@ import {
 } from '@notes-app/database-service';
 import { NoteObjectService } from '@notes-app/storage-service';
 import { createNoteMediaKey, createNoteShortContent, noteItemToNoteItemOutput, shortNoteItemToNoteItemOutputList } from '../helpers';
-import { AppError, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
+import { AppError, delay, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
 import { convertNoteRepositoryError, convertToErrorItemOutput, NOTE_REPOSITORY_ERROR_CODES } from '../errors';
 
 const NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS = 3600; // 1 hour
@@ -142,6 +144,15 @@ export class NoteRepositoryImpl implements NoteRepository {
     }
   }
 
+  public async getNoteIds(input: GetNoteIdsInput): Promise<GetNoteIdsOutput> {
+    const output = await this.db.getNoteIds(input.PK,input.limit,input.pageMark);
+    return {
+      limit: output.limit,
+      count: output.SKs.length,
+      pageMark: output.pageMark,
+      note_ids: output.SKs
+    }
+  }
   // update notes
 
   public async updateNotes(input: UpdateNotesInput): Promise<UpdateNotesOutput> {
@@ -197,18 +208,6 @@ export class NoteRepositoryImpl implements NoteRepository {
     catch(error) {
       throw convertNoteRepositoryError('deleteNotes', error);
     }
-  }
-
-  private async enqueuDeleteNotesMessage(prefixes: string[]): Promise<void> {
-    if (prefixes.length == 0) return;
-
-    const message: QueueMessage = {
-      source_type: QueueMessageSourceType.NOTE_SERVICE,
-      event_type: QueueMessageEventType.DELETE_NOTES,
-      body: { prefixes },
-    };
-
-    await this.queue.enqueueMessage(message);
   }
 
   /* NoteMedia related method */
@@ -395,7 +394,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       });
 
       // enqueue a message to delete the media objects
-      await this.enqueuDeleteMediasMessage(allKeys);
+      this.enqueuDeleteMediasMessage(allKeys);
 
       return {
         unsuccessful: allUnsuccessful.length > 0 ? allUnsuccessful : undefined,
@@ -418,7 +417,7 @@ export class NoteRepositoryImpl implements NoteRepository {
   }
 
   public async deleteMediasByPrefixes(input: DeleteMediasByPrefixInput): Promise<DeleteMediasByPrefixOutput> {
-    const { prefixes, extras } = input;
+    const { prefixes } = input;
     const outputs = await executeBatch(prefixes,
       async (prefix) => {
         try {
@@ -438,14 +437,8 @@ export class NoteRepositoryImpl implements NoteRepository {
     }, 
     25, 
     100);
-    // return (await Promise.all(
-    //   prefixes.map(async (prefix) => {
-        
-    //   }))
-    // ).filter(v => v !== null)
     return { 
-      unsuccessful: outputs.filter(item => null !== item),
-      extras
+      unsuccessful: outputs.filter(item => null !== item)
     }
   }
 
@@ -458,6 +451,30 @@ export class NoteRepositoryImpl implements NoteRepository {
       body: { keys },
     };
 
-    await this.queue.enqueueMessage(message);
+    try {
+      await this.queue.enqueueMessage(message);
+    }
+    catch(error) {
+      LOGGER.logFatal(error, { tag: LOG_TAG, method: "enqueuDeleteMediasMessage" });
+    }
+  }
+
+  private async enqueuDeleteNotesMessage(prefixes: string[]): Promise<void> {
+    if (prefixes.length == 0) return;
+
+    LOGGER.logInfo("enqueue delete notes event", { tag: LOG_TAG, method: "enqueuDeleteNotesMessage", prefixes });
+
+    const message: QueueMessage = {
+      source_type: QueueMessageSourceType.NOTE_SERVICE,
+      event_type: QueueMessageEventType.DELETE_NOTES,
+      body: { prefixes },
+    };
+
+    try {
+      await this.queue.enqueueMessage(message);
+    }
+    catch(error) {
+      LOGGER.logFatal(error, { tag: LOG_TAG, method: "enqueueDeleteNotesMessage" });
+    }
   }
 }

@@ -48,6 +48,12 @@ export interface GetNotesOutput {
   pageMark?: string;
 }
 
+export interface GetNoteIdsOutput {
+  SKs: string[];
+  limit: number;
+  pageMark?: string;
+}
+
 export interface UpdateNoteDataInputItem {
   SK: string;
   timestamp_modified: number;

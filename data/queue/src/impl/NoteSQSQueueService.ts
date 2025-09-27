@@ -13,45 +13,19 @@ import {
   RawQueueMessage,
 } from '../types';
 import { convertSQSError } from '../errors';
+import { getEventType, getSourceType } from '../helpers';
+import { LOGGER } from '@notes-app/common';
 
+const LOG_TAG = "NoteSQSQueueService";
 const DEFAULT_DEQUEUE_POLL_SECONDS = 20;
 
-const sourceLookup: Record<string, QueueMessageSourceType> = {
-  "aws:s3": QueueMessageSourceType.S3,
-  "NOTE_SERVICE": QueueMessageSourceType.NOTE_SERVICE,
-  "QUEUE_SERVICE": QueueMessageSourceType.QUEUE_SERVICE,
-};
-
-const eventLookup: Record<string, QueueMessageEventType> = {
-  "ObjectCreated:Put": QueueMessageEventType.CREATE_OBJECT,
-  "DELETE_MEDIAS": QueueMessageEventType.DELETE_MEDIAS,
-  "DELETE_NOTES": QueueMessageEventType.DELETE_NOTES,
-};
-
-function getSourceType(raw?: string): QueueMessageSourceType {
-  if (!raw) return QueueMessageSourceType.UNKNOWN;
-  return sourceLookup[raw] ?? QueueMessageSourceType.UNKNOWN;
-}
-
-function getEventType(raw?: string): QueueMessageEventType {
-  if (!raw) return QueueMessageEventType.UNKNOWN;
-  return eventLookup[raw] ?? QueueMessageEventType.UNKNOWN;
-}
-
-function parseMessageBody(
-  source_type: QueueMessageSourceType,
-  event_type: QueueMessageEventType,
-  rawBody: any
-): any {
-  switch (source_type) {
-    case QueueMessageSourceType.S3:
-      if (event_type === QueueMessageEventType.CREATE_OBJECT) {
-        // AWS S3 event body is located inside Records[0].s3
-        return {
-          bucket: rawBody.bucket?.name,
-          key: rawBody.object?.key,
-        }
-      }
+function parseMessageBody(source_type: QueueMessageSourceType, event_type: QueueMessageEventType,rawBody: any): any {
+  if (source_type === QueueMessageSourceType.S3 && event_type === QueueMessageEventType.CREATE_OBJECT) {
+    // AWS S3 event body is located inside Records[0].s3
+    return {
+      bucket: rawBody.bucket?.name,
+      key: rawBody.object?.key,
+    }
   }
   // Fallback: return the raw body as-is
   return rawBody;
@@ -157,40 +131,54 @@ export class NoteSQSQueueService implements NoteQueueService {
       return {
         source_type: QueueMessageSourceType.UNKNOWN,
         event_type: QueueMessageEventType.UNKNOWN,
+        receipt_handle: ReceiptHandle,
       };
     }
 
-    let rawSource: string = QueueMessageSourceType.UNKNOWN;
-    let rawEvent: string = QueueMessageEventType.UNKNOWN;
-    let rawBody: any | undefined;
+    try {
+      let rawSource: string = QueueMessageSourceType.UNKNOWN;
+      let rawEvent: string = QueueMessageEventType.UNKNOWN;
+      let rawBody: any | undefined;
 
-    const parsed = JSON.parse(Body);
+      const parsed = JSON.parse(Body);
 
-    // Case 1: S3 event from AWS (nested inside Records array)
-    if ("Records" in parsed && Array.isArray(parsed.Records) && parsed.Records.length > 0) {
-      const rec = parsed.Records[0];
-      rawSource = rec.eventSource;
-      rawEvent = rec.eventName;
-      rawBody = rec.s3 ?? {};
+      // Case 1: S3 event from AWS (nested inside Records array)
+      if (parsed.Records !== undefined && Array.isArray(parsed.Records) && parsed.Records.length > 0) {
+        const rec = parsed.Records[0];
+        rawSource = rec.eventSource;
+        rawEvent = rec.eventName;
+        rawBody = rec.s3 ?? {};
+      }
+      // Case 2: Pre-normalized event produced by another service
+      else if (parsed.source_type !== undefined && parsed.event_type !== undefined) {
+        rawSource = parsed.source_type;
+        rawEvent = parsed.event_type;
+        rawBody = parsed.body ?? {};
+      }
+
+      const source_type = getSourceType(rawSource);
+      const event_type = getEventType(rawEvent);
+      const body = parseMessageBody(source_type, event_type, rawBody);
+      return {
+        source_type,
+        event_type,
+        body,
+        receipt_handle: ReceiptHandle,
+      };
     }
-    // Case 2: Pre-normalized event produced by another service
-    else if ("source_type" in parsed && "event_type" in parsed) {
-      rawSource = parsed.source_type;
-      rawEvent = parsed.event_type;
-      rawBody = parsed.body ?? {};
+    catch(error) {
+      LOGGER.logWarn(error, { tag: LOG_TAG, method: "parseMessage" });
     }
-
-    const source_type = getSourceType(rawSource);
-    const event_type = getEventType(rawEvent);
-    const body = parseMessageBody(source_type, event_type, rawBody);
 
     return {
-      source_type,
-      event_type,
-      body,
+      source_type: QueueMessageSourceType.UNKNOWN,
+      event_type: QueueMessageEventType.UNKNOWN,
+      body: Body,
       receipt_handle: ReceiptHandle,
-    };
+    }
   }
+
+  
 
   /**
    * Removes multiple messages from the queue after they have been processed.

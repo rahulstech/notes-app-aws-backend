@@ -12,23 +12,22 @@ export class App {
     private handlers: Record<QueueMessageEventType, EventHandler>
   ) {}
 
-  private mapByEventType(messages: QueueMessage[]) {
+  private mapByEventType(messages: QueueMessage[]): Record<QueueMessageEventType,QueueMessage[]> {
     return messages.reduce((acc, message) => {
       (acc[message.event_type] ??= []).push(message);
       return acc;
     }, {} as Record<QueueMessageEventType, QueueMessage[]>);
   }
 
-  async handleMessages(messages: QueueMessage[]) {
+  public async handleMessages(messages: QueueMessage[]): Promise<void> {
     if (messages.length === 0) return;
 
     const mapped = this.mapByEventType(messages);
-
     try {
       const outputs = await Promise.all(
-        Object.entries(mapped).map(([eventType, msgs]) =>
-          this.handlers[eventType as QueueMessageEventType].handle(msgs)
-        )
+        Object.entries(mapped).map(([eventType, msgs]) => {
+          return this.handlers[eventType as QueueMessageEventType].handle(msgs);
+        })
       );
   
       const { consumed, requeue } = outputs.reduce<HandleEventOutput>(
@@ -47,7 +46,7 @@ export class App {
       }
     }
     catch(error) {
-      LOGGER.logFatal('handleMessages', { tag: 'App' });
+      LOGGER.logFatal(error, { tag: 'App', method: 'handleMessages' });
       if (error instanceof AppError) {
         if (!error.operational) {
           process.exit(1); // TODO: change exit code

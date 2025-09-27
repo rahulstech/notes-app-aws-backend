@@ -1,11 +1,13 @@
 import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
 import { NoteQueueServiceFactoryImpl, QueueMessageEventType } from "@notes-app/queue-service";
-import { App } from "./app";
+
 import { LOGGER } from "@notes-app/common";
-import { EventHandler } from "./types";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
+import { EventHandler } from "./types";
 import { buildEventHandlerRegistry } from "./eventhandler";
+import { App } from "./app";
+
 
 const queueFactory = new NoteQueueServiceFactoryImpl();
 

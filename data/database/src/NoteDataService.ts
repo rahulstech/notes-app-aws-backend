@@ -2,6 +2,7 @@ import {
   CreateNoteDataInputItem,
   CreateNoteDataOutputItem,
   DeleteMultipleNotesDataOutput,
+  GetNoteIdsOutput,
   GetNotesOutput,
   NoteItem,
   NoteMediaItem,
@@ -16,6 +17,8 @@ export interface NoteDataService {
 
   getNotes(PK: String, limit: number, pageMark?: string): Promise<GetNotesOutput>;
 
+  getNoteIds(PK: string, limit: number, pageMark?: string): Promise<GetNoteIdsOutput>;
+
   getNoteById(PK: string, SK: string): Promise<NoteItem>;
 
   updateSingleNote(PK: string, input: UpdateNoteDataInputItem): Promise<UpdateNoteDataOutputItem>;
@@ -25,8 +28,6 @@ export interface NoteDataService {
   updateMediaStatus(PK: string,SK: string,items: UpdateMediaStatusInputItem[]): Promise<void>;
 
   addNoteMedias(PK: string, SK: string, medias: NoteMediaItem[]): Promise<NoteMediaItem[]>
-
-  // getNoteMediasByKeys(PK: string, SK: string, keys: string[]): Promise<NoteMediaItem[]>
 
   getNoteMedias(PK: string, SK: string): Promise<Record<string,NoteMediaItem>>
 

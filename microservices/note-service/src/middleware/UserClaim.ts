@@ -1,33 +1,38 @@
-import { ENVIRONMENT, LOGGER } from "@notes-app/common";
+import { APP_ERROR_CODE, ENVIRONMENT, newAppErrorBuilder } from "@notes-app/common";
 import { NextFunction, RequestHandler } from "express";
-import { NoteApiExpressRequest, UserClaim } from "../types";
+import { NoteApiExpressRequest } from "../types";
 
 const { NODE_ENV } = ENVIRONMENT;
 
 const isDev = NODE_ENV === 'dev';
 const isProd = NODE_ENV === 'prod';
 
-const GUEST_USERCLAIM: UserClaim = {
-    userId: 'GUEST',
-};
+export interface UserClaim {
+    userId: string;
+}
 
 function devClaimExtractor(req: NoteApiExpressRequest): UserClaim {
-    return GUEST_USERCLAIM;
+    return {
+        userId: 'GUEST',
+    };
 }
 
 function prodClaimExtractor(req: NoteApiExpressRequest): UserClaim {
     const claims = req.apiGateway?.event?.requestContext?.authorizer?.claims;
     if (claims) {
-        const { sub } = claims;
         return {
-            userId: sub,
+            userId: claims.sub,
         }
     }
-    return GUEST_USERCLAIM;
+    throw newAppErrorBuilder()
+            .setHttpCode(401)
+            .setCode(APP_ERROR_CODE.UNAUTHORIZED)
+            .addDetails('unauthorized - invalid user claim')
+            .build();
 }
 
 export function extractUserClaim(): RequestHandler {
-    return (req:NoteApiExpressRequest, _, next: NextFunction) => {
+    return (req: NoteApiExpressRequest, _, next: NextFunction) => {
         let userClaim: UserClaim | undefined;
         if (isDev) {
             userClaim = devClaimExtractor(req);

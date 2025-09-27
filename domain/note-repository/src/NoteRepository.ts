@@ -10,6 +10,8 @@ import {
   DeleteNotesOutput,
   GetMediaUploadUrlInput,
   GetMediaUploadUrlOutput,
+  GetNoteIdsInput,
+  GetNoteIdsOutput,
   GetNoteInput,
   GetNoteOutput,
   GetNotesInput,
@@ -23,7 +25,6 @@ import {
 } from './types';
 
 export interface NoteRepository {
-
   /* Note related methods */
 
   createNotes(inputs: CreateNotesInput): Promise<CreateNotesOutput>;
@@ -32,7 +33,7 @@ export interface NoteRepository {
 
   getNotes(input: GetNotesInput): Promise<GetNotesOutput>;
 
-  // getMediaKeysByPrefix(prefix: string): Promise<string[]>;
+  getNoteIds(input: GetNoteIdsInput): Promise<GetNoteIdsOutput>;
 
   updateNotes(input: UpdateNotesInput): Promise<UpdateNotesOutput>;
 

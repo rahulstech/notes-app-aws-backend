@@ -1,17 +1,19 @@
 import { NoteRepository, NoteRepositoryFactory } from "@note-app/note-repository";
-import { ApiGatewayRequest } from "@notes-app/common";
+import { BaseRequest } from "@notes-app/express-common";
+import { UserClaim } from "./middleware/UserClaim";
+import { APIGatewayProxyEvent } from "aws-lambda";
 
-export interface UserClaim {
-    userId: string;
+export interface ApiGatewayEventType {
+    event: APIGatewayProxyEvent,
 }
 
-export interface NoteApiExpressRequest extends ApiGatewayRequest {
+export interface NoteApiExpressRequest extends BaseRequest {
     
     noteRepository: NoteRepository;
 
-    validValue?: Record<string,any>;
-
     userClaim?: UserClaim;
+
+    apiGateway: ApiGatewayEventType;
 }
 
 export interface NoteExpressAppConfiguration {

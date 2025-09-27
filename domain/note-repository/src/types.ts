@@ -58,6 +58,19 @@ export interface GetNotesOutput {
   notes: Omit<NoteItemType, 'user_id'|'medias'>[];
 }
 
+export interface GetNoteIdsInput {
+  PK: string;
+  limit: number;
+  pageMark?: string;
+}
+
+export interface GetNoteIdsOutput {
+  limit: number;
+  count: number;
+  pageMark?: string;
+  note_ids: string[];
+}
+
 // update note
 
 export type UpdateNoteItemInput = UpdateNoteDataInputItem;
@@ -164,12 +177,10 @@ export interface RemoveMediasOutput {
 
 export interface DeleteMediasByPrefixInput {
   prefixes: string[];
-  extras: any;
 }
 
 export interface DeleteMediasByPrefixOutput {
   unsuccessful: string[];
-  extras: any;
 }
 
 export interface DeleteMediasByKeyInput {

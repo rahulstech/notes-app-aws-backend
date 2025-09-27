@@ -8,9 +8,8 @@ import {
   NoteIdParameterRule,
   RemoveNoteMediasRule,
   UpdateNotesRule,
-} from '../validation/NoteRouterValidationRule';
-import { catchError } from '../middleware/Error';
-import { validateRequest } from '../middleware/Validator';
+} from './NoteRouterValidationRule';
+import { catchError, validateRequest } from '@notes-app/express-common';
 import { NoteApiExpressRequest } from '../types';
 import { newAppErrorBuilder } from '@notes-app/common';
 

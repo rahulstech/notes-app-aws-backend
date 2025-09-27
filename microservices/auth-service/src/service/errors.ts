@@ -11,6 +11,7 @@ export const AUTH_SERVICE_ERROR_CODE = {
     INVALID_PARAMETER: 4009,
 
     USER_ALREADY_VERIFIED: 4010,
+    INVALID_CREDENTIALS: 4011,
 } as const;
 
 export function convertCognitoError(error: NonNullable<any>): AppError {

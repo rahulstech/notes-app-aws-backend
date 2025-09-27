@@ -12,7 +12,7 @@ export const RegisterRules = {
 
 export const RegisterVerifyRules = {
     body: Joi.object().keys({
-        username: Joi.string().required(),
+        email: Joi.string().required(),
         code: Joi.string().required(),
     })
     .required(),
@@ -41,7 +41,7 @@ export const RefreshRules = {
 }
 
 export const ForgotPasswordRules = {
-    query: Joi.object().keys({
+    body: Joi.object().keys({
         email: Joi.string().email().required(),
     })
     .required(),

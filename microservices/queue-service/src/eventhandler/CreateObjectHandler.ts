@@ -2,7 +2,7 @@ import { NoteRepository, splitNoteMediaKey, UpdateMediaStatusItem } from "@note-
 import { NoteMediaStatus } from "@notes-app/database-service";
 import { QueueMessage } from "@notes-app/queue-service";
 import { EventHandler, HandleEventOutput } from "../types";
-import { executeBatch, LOGGER } from "@notes-app/common";
+import { executeBatch } from "@notes-app/common";
 
 /**
  * Handles CREATE_OBJECT events from the queue.
@@ -18,8 +18,6 @@ export class CreateObjectHandler implements EventHandler {
 
     // Step 2: Update DB for each user
     const consumedIndices = await this.updateMedias(userNoteMediaMap);
-
-    console.log('consumed ', JSON.stringify(consumedIndices));
 
     // Step 3: Map consumed indices back to original messages
     const consumed = consumedIndices.map((i) => messages[i]);

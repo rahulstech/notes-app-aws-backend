@@ -23,7 +23,7 @@ authRouter.put('/register/verify',
         await req.authRepository.verifyCode({
             type: VerificationType.REGISTRATION,
             code: body.code,
-            email: body.username,
+            email: body.email,
         });
         res.sendStatus(200);
     }));
@@ -39,18 +39,18 @@ authRouter.get('/register/verify/code',
         res.json({ codeDeliveryEmail });
     }));
 
-authRouter.get('/password/code', 
-    validateRequest(ForgotPasswordRules,['query']),
+authRouter.put('/password', 
+    validateRequest(ForgotPasswordRules),
     catchError(async (req: AuthApiRequest,res: Response) => {
-        const { query } = req.validValue;
+        const { body } = req.validValue;
         const codeDeliveryEmail = await req.authRepository.changePassword({ 
             type: ChangePasswordType.FORGET_PASSWORD,
-            email: query.email,
+            email: body.email,
         });
         res.json({ codeDeliveryEmail });
     }));
 
-authRouter.put('/password/verify', 
+authRouter.post('/password/verify', 
     validateRequest(ForgotPasswordVerifyRules),
     catchError(async (req: AuthApiRequest,res: Response) => {
         const { body } = req.validValue;

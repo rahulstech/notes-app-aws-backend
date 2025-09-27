@@ -1,8 +1,8 @@
-import { NoteQueueService, QueueMessage, QueueMessageEventType, QueueMessageSourceType } from "@notes-app/queue-service";
+import { NoteQueueService, QueueMessageEventType, QueueMessageSourceType } from "@notes-app/queue-service";
 import { ChangeEmailInput, ChangePasswordInput, ChangePasswordType, RegisterUserInput, ResendVerificationCodeInput, UpdateTokenOutput, UpdateUserProfileInput, UserLogInInput, UserProfile, VerificationType, VerifyCodeInput } from "../types";
 import { AuthService } from "../../service/AuthService";
 import { AuthRepository } from "../AuthRepository";
-import { AppError, newAppErrorBuilder } from "@notes-app/common";
+import { AppError, LOGGER, newAppErrorBuilder } from "@notes-app/common";
 import { AUTH_REPOSITORY_ERROR_CODE } from "../errors";
 import { ForgotPasswordOutput, LogInOutput } from "../../service/types";
 import { AUTH_SERVICE_ERROR_CODE } from "../../service/errors";
@@ -305,6 +305,17 @@ export class AuthRepositoryImpl implements AuthRepository {
     }
 
     private async enqueueDeleteUser(userId: string) {
-        // TODO: implement enqueueDeleteUser    
+        try {
+            await this.queue.enqueueMessage({
+                source_type: QueueMessageSourceType.AUTH_SERVICE,
+                event_type: QueueMessageEventType.DELETE_USER,
+                body: { 
+                    userId,
+                }
+            });
+        }
+        catch(error) {
+            LOGGER.logFatal(error, { tag: LOG_TAG, method: "enqueueDeleteUser" })
+        }
     }
 }
