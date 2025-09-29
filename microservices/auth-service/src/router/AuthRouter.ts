@@ -1,7 +1,7 @@
 import { Response, Router } from "express";
 import { catchError, validateRequest } from "@notes-app/express-common";
 import { ForgotPasswordRules, ForgotPasswordVerifyRules, LogInRules, RefreshRules, RegisterRules, RegisterVerifyCodeRules, RegisterVerifyRules } from "./AuthVertificationRules";
-import { ChangePasswordType, VerificationType } from "../repository/types";
+import { VerificationType } from "@notes-app/auth-repository";
 import { AuthApiRequest } from "../types";
 
 const authRouter = Router();
@@ -43,8 +43,7 @@ authRouter.put('/password',
     validateRequest(ForgotPasswordRules),
     catchError(async (req: AuthApiRequest,res: Response) => {
         const { body } = req.validValue;
-        const codeDeliveryEmail = await req.authRepository.changePassword({ 
-            type: ChangePasswordType.FORGET_PASSWORD,
+        const codeDeliveryEmail = await req.authRepository.forgotPassword({ 
             email: body.email,
         });
         res.json({ codeDeliveryEmail });

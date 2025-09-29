@@ -1,15 +1,13 @@
-import { BaseRequest } from "@notes-app/express-common";
-import { AuthRepositoryFactory } from "./repository/AuthRepositoryFactory";
-import { AuthRepository } from "./repository/AuthRepository";
+import { AuthenticatedApiGatewayRequest, BaseRequest, UserClaimExtractorProvider } from "@notes-app/express-common";
+import { AuthRepositoryFactory } from "@notes-app/auth-repository";
+import { AuthRepository } from "@notes-app/auth-repository";
 
 export interface AuthAppConfig {
     authRepositoryFactory: AuthRepositoryFactory;
+    userClaimExtractorProvider: UserClaimExtractorProvider;
 }
 
-export interface AuthApiRequest extends BaseRequest {
+export interface AuthApiRequest extends BaseRequest, AuthenticatedApiGatewayRequest  {
     authRepository: AuthRepository;
-}
-
-export interface AuthApiAuthenticatedRequest extends AuthApiRequest {
     accessToken: string;
 }

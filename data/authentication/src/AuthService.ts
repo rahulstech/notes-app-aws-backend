@@ -45,21 +45,15 @@ import {
   
     /* update user */
 
-    // forget password
+    // update password
 
     forgotPassword(input: ForgotPasswordInput): Promise<ForgotPasswordOutput>;
 
     verifyForgotPassword(input: VerifyForgotPasswordInput): Promise<void>;
 
-    // forget password
-
     resetPassword(input: ResetPasswordInput): Promise<void>;
 
-    resendChangePasswordVerificationCode(input: ResendChangePasswordVerificationCodeInput): Promise<ResendChangePasswordVerificationCodeOutput>;
-  
-    verifyChangePassword(input: VerifyChangePasswordInput): Promise<void>;
-
-    // change username
+    // update username
 
     changeUsername(input: ChangeUsernameInput): Promise<ChangeUsernameOutput>;
 
@@ -67,9 +61,9 @@ import {
   
     verifyChangeUsername(input: VerifyChangeUsernameInput): Promise<void>;
   
-    // update user info
+    // update user (non credentials)
 
-    updateUserInfo(input: UpdateUserInput): Promise<void>;
+    updateUser(input: UpdateUserInput): Promise<void>;
 
     // generate new tokens
 

@@ -45,7 +45,9 @@ import {
     ResetPasswordInput,
 } from "../types";
 import { AUTH_SERVICE_ERROR_CODE, convertCognitoError } from "../errors";
-import { newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, LOGGER, newAppErrorBuilder } from "@notes-app/common";
+
+const LOG_TAG = "CognitoAuthServiceImpl";
 
 export interface CognitoAuthServiceConfig {
     accessKeyId: string;
@@ -81,9 +83,6 @@ export class CognitoAuthServiceImpl implements AuthService {
             { Name: "email", Value: input.email },
             { Name: "name", Value: input.fullname },
         ];
-        if (input.user_photo) {
-            UserAttributes.push({ Name: "picture", Value: input.user_photo });
-        }
         try {
             const { UserSub, UserConfirmed, CodeDeliveryDetails } = await this.client.send(
                 new SignUpCommand({
@@ -98,7 +97,6 @@ export class CognitoAuthServiceImpl implements AuthService {
                 username: input.username,
                 email: input.email,
                 fullname: input.fullname,
-                user_photo: input.user_photo,
                 userConfirmed: UserConfirmed!,
                 codeDeliveryEmail: CodeDeliveryDetails!.Destination,
             };
@@ -205,7 +203,7 @@ export class CognitoAuthServiceImpl implements AuthService {
         if (!output) {
             throw newAppErrorBuilder()
                    .setHttpCode(400)
-                   .setCode(AUTH_SERVICE_ERROR_CODE.INVALID_PARAMETER)
+                   .setCode(APP_ERROR_CODE.BAD_REQUEST)
                    .addDetails({
                         description: "required either accessToken or username",
                         context: "getUserInfo",
@@ -224,7 +222,7 @@ export class CognitoAuthServiceImpl implements AuthService {
             username: attributes?.email!,
             email: attributes?.email!,
             fullname: attributes?.name!,
-            user_photo: attributes?.picture,
+            profile_photo: attributes?.picture,
         };
     }
 
@@ -283,6 +281,7 @@ export class CognitoAuthServiceImpl implements AuthService {
     }
 
     // reset password
+
     public async resetPassword(input: ResetPasswordInput): Promise<void> {
         try {
             await this.client.send(
@@ -297,42 +296,11 @@ export class CognitoAuthServiceImpl implements AuthService {
         }
     }
 
-    public async resendChangePasswordVerificationCode(input: ResendChangePasswordVerificationCodeInput): Promise<ResendChangePasswordVerificationCodeOutput> {
-        try {
-            const {CodeDeliveryDetails} = await this.client.send(
-                new GetUserAttributeVerificationCodeCommand({
-                    AccessToken: input.accessToken,
-                    AttributeName: "password",
-                })
-            );
-            return {
-                codeDeliveryEmail: CodeDeliveryDetails!.Destination,
-             };
-        } catch (error) {
-            throw convertCognitoError(error);
-        }
-    }
-
-    public async verifyChangePassword(input: VerifyChangePasswordInput): Promise<void> {
-        try {
-            await this.client.send(
-                new VerifyUserAttributeCommand({
-                    AccessToken: input.accessToken,
-                    AttributeName: "password",
-                    Code: input.code,
-                })
-            );
-            
-        } catch (error) {
-            throw convertCognitoError(error);
-        }
-    }
-
     // change username
 
     public async changeUsername(input: ChangeUsernameInput): Promise<ChangeUsernameOutput> {
         try {
-            await this.client.send(
+            const { CodeDeliveryDetailsList } = await this.client.send(
                 new UpdateUserAttributesCommand({
                     AccessToken: input.accessToken,
                     UserAttributes: [
@@ -341,7 +309,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                 })
             );
             return {
-                codeDeliveryEmail: input.newUsername,
+                codeDeliveryEmail: CodeDeliveryDetailsList[0].Destination,
             }
         }
         catch (error) {
@@ -349,9 +317,7 @@ export class CognitoAuthServiceImpl implements AuthService {
         }
     }
 
-    public async resendUsernameVerificationCode(
-        input: ResendUsernameVerificationCodeInput
-    ): Promise<ResendUsernameVerificationCodeOutput> {
+    public async resendUsernameVerificationCode(input: ResendUsernameVerificationCodeInput): Promise<ResendUsernameVerificationCodeOutput> {
         try {
             const { CodeDeliveryDetails } = await this.client.send(
                 new GetUserAttributeVerificationCodeCommand({
@@ -385,15 +351,24 @@ export class CognitoAuthServiceImpl implements AuthService {
 
     // update user info
 
-    public async updateUserInfo(input: UpdateUserInput): Promise<void> {
+    public async updateUser(input: UpdateUserInput): Promise<void> {
+        const UserAttributes = [];
+        if (input.fullname) {
+            UserAttributes.push({ Name: "name", Value: input.fullname });
+        }
+        if (input.profile_photo !== undefined) {
+            const picture = !input.profile_photo ? "" : input.profile_photo;
+            UserAttributes.push({ Name: "picture", Value: picture });
+        }
+        if (UserAttributes.length === 0) {
+            LOGGER.logWarn('no attribute to update', { tag: LOG_TAG, method: 'updateUser'});
+            return;
+        }
         try {
             await this.client.send(
                 new UpdateUserAttributesCommand({
                     AccessToken: input.accessToken,
-                    UserAttributes: [
-                        ...(input.fullname ? [{ Name: "name", Value: input.fullname }] : []),
-                        ...(input.user_photo ? [{ Name: "picture", Value: input.user_photo }] : []),
-                    ],
+                    UserAttributes,
                 })
             );
         } catch (error) {
@@ -430,7 +405,7 @@ export class CognitoAuthServiceImpl implements AuthService {
 
     public async deleteUser(input: DeleteUserInput): Promise<void> {
         try {
-            const response = await this.client.send(
+            await this.client.send(
                 new DeleteUserCommand({
                     AccessToken: input.accessToken,
                 })
@@ -441,6 +416,7 @@ export class CognitoAuthServiceImpl implements AuthService {
     }
 
     /* Helper methods */
+
     private calculateExpiresAt(expiresIn: number): number {
         return Math.floor(Date.now() / 1000) + expiresIn;
     }

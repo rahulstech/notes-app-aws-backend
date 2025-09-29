@@ -6,6 +6,7 @@ import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
 import serverless from "serverless-http";
+import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
 // build the app configuration
 const config: NoteExpressAppConfiguration = {
@@ -14,6 +15,7 @@ const config: NoteExpressAppConfiguration = {
     new NoteObjectServiceFactoryImpl(),
     new NoteQueueServiceFactoryImpl()
   ),
+  userClaimExtractorProvider: new UserClaimExtractorProviderImpl(),
 };
 
 // create express app

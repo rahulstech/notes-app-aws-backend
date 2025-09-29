@@ -1,6 +1,7 @@
 import { STATUS_CODES } from "node:http";
 
 export const APP_ERROR_CODE = {
+    UNKNOWN: 6000,
     NOT_FOUND: 6001,
     INTERNAL_SERVER_ERROR: 6002,
     NOT_IMPLEMENTED: 6003,

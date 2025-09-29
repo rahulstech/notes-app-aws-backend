@@ -6,11 +6,12 @@ import {
   PutObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ObjectUploadUrlInput, ObjectUploadUrlOutput } from '../types';
-import { convertS3Error } from '../errors';
-import { LOGGER } from '@notes-app/common';
+import { convertS3Error, S3_ERROR_CODES } from '../errors';
+import { executeChunk, LOGGER } from '@notes-app/common';
 
 const LOG_TAG = 'NoteS3ObjectService';
 
@@ -68,24 +69,58 @@ export class NoteS3ObjectService implements NoteObjectService {
     return new URL(key, this.mediaBaseUrl).toString();
   }
 
-  public async deleteMultipleObjects(keys: string[]): Promise<string[]> {
+  public getObjectKeyFromMediaUrl(url: string): string {
+    return url.slice(this.mediaBaseUrl.length+1);
+  }
+
+  public async isKeyExists(Key: string): Promise<boolean> {
     try {
-      const { Errors } = await this.client.send(new DeleteObjectsCommand({
+      await this.client.send(new HeadObjectCommand({
         Bucket: this.bucket,
-        Delete: {
-          Objects: keys.map((Key) => ({ Key })),
-        },
+        Key,
       }));
-      return Errors?.reduce<string[]>((acc,{Key}) => {
-        if (Key) {
-          acc.push(Key);
-        }
-        return acc;
-      },[]) ?? [];
+      return true;
     }
     catch(error) {
-      throw convertS3Error(error);
+      const storageerror = convertS3Error(error);
+      if (storageerror.code === S3_ERROR_CODES.NO_SUCH_KEY) {
+        return false;
+      }
+      throw storageerror;
     }
+  }
+
+  public async deleteMultipleObjects(keys: string[]): Promise<string[]> {
+    // returns 
+    return await executeChunk(keys,
+      async (chunk) => {
+        try {
+          const { Errors } = await this.client.send(new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: {
+              Objects: chunk.map((Key) => ({ Key })),
+            },
+          }));
+          if (Errors) {
+            return Errors?.reduce<string[]>((acc,{Key}) => {
+              if (Key) {
+                acc.push(Key);
+              }
+              return acc;
+            },[]);
+          }
+        }
+        catch(error) {
+          LOGGER.logError(error, { tag: LOG_TAG, method: "deleteMultipleObjects" });
+          const storageerror = convertS3Error(error);
+          if (storageerror.retriable) {
+            return chunk;
+          }
+        }
+        return [];
+      },
+      1000,
+      100);
   }
 
   public async deleteObjectByPrefix(prefix: string): Promise<void> {

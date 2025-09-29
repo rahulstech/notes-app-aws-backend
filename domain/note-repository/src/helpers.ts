@@ -1,5 +1,5 @@
 import { CreateNoteDataOutputItem, NoteItem, ShortNoteItem, toNotePublicRecord } from "@notes-app/database-service";
-import { decodeBase64, encodeBase64, renameKeys } from "@notes-app/common";
+import { renameKeys } from "@notes-app/common";
 import { NoteItemType } from "./types";
 
 const SHORT_CONTENT_MAX_LENGTH = 60
@@ -31,6 +31,10 @@ export function shortNoteItemToNoteItemOutputList(items: ShortNoteItem[]): Omit<
     return items.map(shortNoteItemToNoteItemOutput)
 }
 
+// media key
+
+export const DIR_PREFIX_NOTE_MEDIAS = 'medias';
+
 export interface NoteMediaKeyParts {
     user_id: string;
     note_id: string;
@@ -40,15 +44,16 @@ export interface NoteMediaKeyParts {
 export function createNoteMediaKey(keyparts: NoteMediaKeyParts): string {
     const { user_id, note_id, media_id  } = keyparts;
     const parts = ['medias',user_id,note_id];
-    const prefix = parts.join('/')+'/';
     if (media_id) {
-        const encMId = encodeBase64(media_id);
-        return `${prefix}${encMId}`;
+        parts.push(media_id)
     }
-    return prefix;
+    return parts.join('/');
 }
 
-export function splitNoteMediaKey(key: string): NoteMediaKeyParts {
-    const [_,user_id,note_id,media_id] = key.split('/');
-    return { user_id, note_id, media_id };
+export function splitNoteMediaKey(key: string): NoteMediaKeyParts | null {
+    const [medias,user_id,note_id,media_id] = key.split('/');
+    if (medias === DIR_PREFIX_NOTE_MEDIAS) {
+        return { user_id, note_id, media_id };
+    }
+    return null;
 }

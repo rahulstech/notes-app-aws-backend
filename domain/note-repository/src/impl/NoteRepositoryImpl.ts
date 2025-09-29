@@ -44,12 +44,12 @@ import {
   NoteMediaStatus,
 } from '@notes-app/database-service';
 import { NoteObjectService } from '@notes-app/storage-service';
-import { createNoteMediaKey, createNoteShortContent, noteItemToNoteItemOutput, shortNoteItemToNoteItemOutputList } from '../helpers';
-import { AppError, delay, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
+import { createNoteMediaKey, createNoteShortContent, DIR_PREFIX_NOTE_MEDIAS, noteItemToNoteItemOutput, shortNoteItemToNoteItemOutputList } from '../helpers';
+import { AppError, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
 import { convertNoteRepositoryError, convertToErrorItemOutput, NOTE_REPOSITORY_ERROR_CODES } from '../errors';
 
-const NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS = 3600; // 1 hour
 const LOG_TAG = 'NoteRepositoryImpl';
+const NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS = 3600; // 1 hour
 
 export interface NoteRespositoryOptions {
   databaseService: NoteDataService;
@@ -100,13 +100,14 @@ export class NoteRepositoryImpl implements NoteRepository {
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError('createNotes',error);
+      throw convertNoteRepositoryError(error);
     }
 
     // no items created due to db data service error
     throw newAppErrorBuilder()
           .setHttpCode(500)
           .setCode(NOTE_REPOSITORY_ERROR_CODES.CREATE_NOTES_FAILED)
+          .addDetails('no note created')
           .build();
   }
 
@@ -121,7 +122,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError('getNote',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -140,7 +141,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       };
     }
     catch(error) {
-      throw convertNoteRepositoryError("getNotes", error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -182,7 +183,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs };
     }
     catch(error) {
-      throw convertNoteRepositoryError('updateNotes',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -206,7 +207,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { unsuccessful };
     }
     catch(error) {
-      throw convertNoteRepositoryError('deleteNotes', error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -243,7 +244,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs: outputs as AddMediaItemOutput[] };
     }
     catch(error) {
-      throw convertNoteRepositoryError('addMedias',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -283,7 +284,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs };
     }
     catch(error) {
-      throw convertNoteRepositoryError('getMediaUploadUrls',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -322,6 +323,10 @@ export class NoteRepositoryImpl implements NoteRepository {
     return { note_id: SK, urls };
   }
 
+  public isMediaKey(key: string): boolean {
+    return key.startsWith(DIR_PREFIX_NOTE_MEDIAS);
+  }
+
   // update media
 
   public async updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput> {
@@ -349,7 +354,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { items };
     }
     catch(error) {
-      throw convertNoteRepositoryError('updateMediaStatus',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -401,7 +406,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError('removeMedias',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 
@@ -412,7 +417,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { unsuccessful };
     }
     catch(error) {
-      throw convertNoteRepositoryError('deleteMediasByKey',error);
+      throw convertNoteRepositoryError(error);
     }
   }
 

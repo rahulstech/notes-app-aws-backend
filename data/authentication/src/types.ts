@@ -21,7 +21,6 @@ export interface SignUpInput {
     password: string;
     email: string;
     fullname: string;
-    user_photo?: string;
 }
 
 export interface SignUpOutput extends VertificationCodeOutput {
@@ -29,7 +28,6 @@ export interface SignUpOutput extends VertificationCodeOutput {
     username: string;
     email: string;
     fullname: string;
-    user_photo?: string;
     userConfirmed: boolean;    // whether account is confirmed
 }
 
@@ -67,7 +65,7 @@ export interface GetUserOutput {
     username: string;
     email: string;
     fullname: string;
-    user_photo?: string;
+    profile_photo?: string;
 }
 
 // Forgot Password
@@ -120,7 +118,7 @@ export interface ResendUsernameVerificationCodeOutput extends VertificationCodeO
 // Update User Info
 export interface UpdateUserInput extends AuthenticatedInput {
     fullname?: string;
-    user_photo?: string;
+    profile_photo?: string;
 }
 
 // Issue Token

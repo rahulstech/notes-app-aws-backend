@@ -11,16 +11,18 @@ import { App } from "./app";
 // Setup (cold start init)
 // ----------------------
 const queueFactory = new NoteQueueServiceFactoryImpl();
+const storageFactory =   new NoteObjectServiceFactoryImpl();
 const repositoryFactory = new NoteRepositoryFactoryImpl(
   new NoteDataServiceFactoryImpl(),
-  new NoteObjectServiceFactoryImpl(),
+  storageFactory,
   queueFactory
 );
 
 const queueService = queueFactory.createNoteQueueService();
+const storageService = storageFactory.createNoteObjectService();
 const noteRepository = repositoryFactory.createNoteRepository();
 
-const handlerRegistry: Record<QueueMessageEventType, EventHandler> = buildEventHandlerRegistry(noteRepository);
+const handlerRegistry: Record<QueueMessageEventType, EventHandler> = buildEventHandlerRegistry(storageService,noteRepository);
 
 const app = new App(queueService, handlerRegistry);
 

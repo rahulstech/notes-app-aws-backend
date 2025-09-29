@@ -5,6 +5,7 @@ import { ENVIRONMENT, LOGGER } from "@notes-app/common";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
+import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
 const { NOTE_SERVICE_SERVER_PORT } = ENVIRONMENT;
 
@@ -14,6 +15,7 @@ const config: NoteExpressAppConfiguration = {
                           new NoteObjectServiceFactoryImpl(),
                           new NoteQueueServiceFactoryImpl()
                         ),
+  userClaimExtractorProvider: new UserClaimExtractorProviderImpl(),
 }
 
 const app = createNoteExpressApp(config);

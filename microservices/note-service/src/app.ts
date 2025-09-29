@@ -1,11 +1,10 @@
-import type { Express, NextFunction, Response } from 'express';
+import type { Express, NextFunction } from 'express';
 import express from 'express';
 import notesRouter from './router/NotesRouter';
 import { NoteApiExpressRequest, NoteExpressAppConfiguration } from './types';
 import helmet from 'helmet';
 import cors from 'cors';
-import { extractUserClaim } from './middleware/UserClaim';
-import { expressErrorHandler, expressNotFoundHandler } from '@notes-app/express-common'
+import { expressErrorHandler, expressNotFoundHandler, extractUserClaim } from '@notes-app/express-common'
 
 export function createNoteExpressApp(config: NoteExpressAppConfiguration): Express {
 
@@ -23,6 +22,7 @@ export function createNoteExpressApp(config: NoteExpressAppConfiguration): Expre
 
     app.use((req: NoteApiExpressRequest,_, next: NextFunction) => {
         req.noteRepository = config.noteRepositoryFactory.createNoteRepository();
+        req.userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor()
         next();
     });
 

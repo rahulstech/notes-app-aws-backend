@@ -26,10 +26,10 @@
       },
       "configurations": {
         "development": {
-          "main": "microservices/queue-service/dev-src/main.ts"
+          "main": "microservices/queue-service/src/main.ts"
         },
         "production": {
-          "main": "microservices/queue-service/prod-src/index.ts",
+          "main": "microservices/queue-service/src/index.ts",
           "esbuildOptions": {
             "sourcemap": false,
             "outExtension": {

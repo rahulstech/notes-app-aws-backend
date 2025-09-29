@@ -1,13 +1,15 @@
-import { catchError, validateRequest } from "@notes-app/express-common";
+import { catchError, extractUserClaim, validateRequest } from "@notes-app/express-common";
 import { NextFunction, Response, Router } from "express";
-import { AuthApiAuthenticatedRequest } from "../types";
 import { APP_ERROR_CODE, newAppErrorBuilder } from "@notes-app/common";
-import { ChangePasswordType, VerificationType } from "../repository/types";
-import { ChangeEmailRules, ChangeEmailVerifyRules, ResetPasswordRules, ResetPasswordVerifyRules, UpdateUserProfileRules } from "./AuthVertificationRules";
+import { VerificationType } from "@notes-app/auth-repository";
+import { ChangeEmailRules, ChangeEmailVerifyRules, ResetPasswordRules, ResetPasswordVerifyRules, UpdateUserProfileRules, UserPhotUploadUrlRules } from "./AuthVertificationRules";
+import { AuthApiRequest } from "../types";
 
 const usersRouter = Router();
 
-usersRouter.use((req: AuthApiAuthenticatedRequest,_,next: NextFunction) => {
+// middlewares
+
+usersRouter.use((req: AuthApiRequest,_,next: NextFunction) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
     if (!authHeader || typeof authHeader !== "string") {
         const prefix = (authHeader as string).slice(0,6).toLowerCase();
@@ -26,34 +28,25 @@ usersRouter.use((req: AuthApiAuthenticatedRequest,_,next: NextFunction) => {
     next();
 });
 
+usersRouter.use(extractUserClaim());
+
+// routes
+
 usersRouter.put('/password', 
     validateRequest(ResetPasswordRules),
-    catchError(async (req: AuthApiAuthenticatedRequest,res: Response,next: NextFunction) => {
+    catchError(async (req: AuthApiRequest,res: Response,next: NextFunction) => {
         const { body } = req.validValue;
         await req.authRepository.changePassword({
-            type: ChangePasswordType.RESET_PASSWORD,
             oldPassword: body.oldPassword,
             newPassword: body.newPassword,
             accessToken: req.accessToken,
         })
         res.sendStatus(200);
     }));
-
-usersRouter.post('/password/verify', 
-    validateRequest(ResetPasswordVerifyRules),
-    catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
-        const { body } = req.validValue;
-        await req.authRepository.verifyCode({
-            type: VerificationType.RESET_PASSWORD,
-            code: body.code,
-            accessToken: req.accessToken,
-        })
-    }));
     
-
 usersRouter.put('/email',
     validateRequest(ChangeEmailRules),
-    catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
+    catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
         const codeDeliveryEmail = await req.authRepository.changeEmail({
             accessToken: req.accessToken,
@@ -64,7 +57,7 @@ usersRouter.put('/email',
 
 usersRouter.post('/email/verify', 
     validateRequest(ChangeEmailVerifyRules),
-    catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
+    catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
         await req.authRepository.verifyCode({
             type: VerificationType.EMAIL,
@@ -74,25 +67,51 @@ usersRouter.post('/email/verify',
         res.sendStatus(200);
     }));
 
-usersRouter.route('/')
-.get(catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
-    const profile = await req.authRepository.getUserProfile(req.accessToken);
-    res.json({ profile });
-}))
-.patch(
-    validateRequest(UpdateUserProfileRules),
-    catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
+usersRouter.get('/profile-photo-upload-url',
+    validateRequest(UserPhotUploadUrlRules),
+    catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
-        await req.authRepository.updateUserProfile({
+        const output = await req.authRepository.getProfilePhotoUploadUrl({
+            type: body.type,
+            size: body.size,
+            userId: req.userClaim.userId,
+        });
+        res.json(output);
+    })
+)
+
+usersRouter.get('/profile', 
+    catchError(async (req: AuthApiRequest, res: Response) => {
+        const profile = await req.authRepository.getUserProfile({
             accessToken: req.accessToken,
-            fullname: body.fullname,
-            user_photo: body.user_photo,
+        });
+        res.json({ profile });
+    }));
+
+usersRouter.route('/')
+    .patch(
+        validateRequest(UpdateUserProfileRules),
+        catchError(async (req: AuthApiRequest, res: Response) => {
+            const { body } = req.validValue;
+            const output = await req.authRepository.updateUserProfile({
+                accessToken: req.accessToken,
+                fullname: body.fullname,
+                profile_photo: body.profile_photo,
+            });
+            res.json(output);
+        }))
+    .delete(catchError(async (req: AuthApiRequest, res: Response) => {
+        await req.authRepository.deleteUser({
+            accessToken: req.accessToken,
         });
         res.sendStatus(200);
     }))
-.delete(catchError(async (req: AuthApiAuthenticatedRequest, res: Response) => {
-    await req.authRepository.deleteUser(req.accessToken);
-    res.sendStatus(200);
-}))
+
+usersRouter.delete('/profile-photo', 
+    catchError(async (req: AuthApiRequest, res: Response) => {
+        await req.authRepository.removeProfilePhoto(req.accessToken);
+        res.sendStatus(200);
+    })
+)
 
 export { usersRouter }

@@ -18,6 +18,7 @@ export enum QueueMessageEventType {
   DELETE_MEDIAS = "DELETE_MEDIAS",
   DELETE_NOTES = "DELETE_NOTES",
   DELETE_USER = "DELETE_USER",
+  DELETE_PROFILE_PHOTO = "DELETE_PROFILE_PHOTO",
   UNKNOWN = "UNKNOWN"
 }
 
@@ -26,6 +27,7 @@ export const EventLookup: Record<string, QueueMessageEventType> = {
   "DELETE_MEDIAS": QueueMessageEventType.DELETE_MEDIAS,
   "DELETE_NOTES": QueueMessageEventType.DELETE_NOTES,
   "DELETE_USER": QueueMessageEventType.DELETE_USER,
+  "DELETE_PROFILE_PHOTO": QueueMessageEventType.DELETE_PROFILE_PHOTO,
 };
 
 export interface QueueMessage {

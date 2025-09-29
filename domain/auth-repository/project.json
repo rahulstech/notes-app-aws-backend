@@ -1,0 +1,20 @@
+{
+  "name": "@notes-app/auth-repository",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "domain/auth-repository/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/domain/auth-repository",
+        "tsConfig": "domain/auth-repository/tsconfig.lib.json",
+        "packageJson": "domain/auth-repository/package.json",
+        "main": "domain/auth-repository/src/index.ts",
+        "assets": ["domain/auth-repository/*.md"]
+      }
+    }
+  }
+}

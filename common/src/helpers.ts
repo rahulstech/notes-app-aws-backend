@@ -1,3 +1,4 @@
+import { APP_ERROR_CODE, newAppErrorBuilder } from "./apperror";
 
 export function encodeBase64(input: string, encoding: BufferEncoding = 'utf-8'): string {
     return Buffer.from(input, encoding).toString('base64url')
@@ -77,12 +78,19 @@ export async function delay(ms: number) {
 
 export async function executeChunk<I,O extends NonNullable<unknown>>(items: I[], handler: (chunk: I[])=>Promise<O[]>, chunkSize: number, delayMs: number = 0): Promise<O[]> {
     if (chunkSize < 1) {
-        throw new Error(`executeChunk chunkSize muct be atleat 1; foudn ${chunkSize}`);
+        throw newAppErrorBuilder()
+                .setHttpCode(500)
+                .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
+                .addDetails({
+                    description: "internal server error",
+                    context: "executeChunk",
+                    reason: `chunkSize must be atleast 1; found ${chunkSize}`
+                })
+                .build();
     }
     const alloutputs: O[] = [];
-    const count = items.length;
     let processed = 0;
-    while(processed < count) {
+    while(processed < items.length) {
         const chunk = items.slice(processed, processed+chunkSize);
         const outputs = await handler(chunk);
         alloutputs.push(...outputs);
@@ -94,7 +102,15 @@ export async function executeChunk<I,O extends NonNullable<unknown>>(items: I[],
 
 export async function executeBatch<I,O>(items: I[], builder: (item: I)=>Promise<O>, batchSize: number, delayMs: number = 0): Promise<O[]> {
     if (batchSize < 1) {
-        throw new Error(`executeBatch batchSize must be atleast 1; found ${batchSize}`);
+        throw newAppErrorBuilder()
+                .setHttpCode(500)
+                .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
+                .addDetails({
+                    description: "internal server error",
+                    context: "executeBatch",
+                    reason: `batchSize must be atleast 1; found ${batchSize}`
+                })
+                .build();
     }
     const alloutputs: O[] = [];
     const count = items.length;

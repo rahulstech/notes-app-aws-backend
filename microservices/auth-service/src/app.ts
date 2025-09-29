@@ -21,6 +21,7 @@ export function createAuthExpressApp(config: AuthAppConfig): Express {
 
     app.use((req: AuthApiRequest,_,next: NextFunction) => {
         req.authRepository = config.authRepositoryFactory.createAuthRepository();
+        req.userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
         next();
     })
 

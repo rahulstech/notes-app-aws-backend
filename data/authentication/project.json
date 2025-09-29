@@ -1,0 +1,20 @@
+{
+  "name": "@notes-app/authentication",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "data/authentication/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/data/authentication",
+        "tsConfig": "data/authentication/tsconfig.lib.json",
+        "packageJson": "data/authentication/package.json",
+        "main": "data/authentication/src/index.ts",
+        "assets": ["data/authentication/*.md"]
+      }
+    }
+  }
+}

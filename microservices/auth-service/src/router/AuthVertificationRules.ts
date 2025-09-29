@@ -88,8 +88,16 @@ export const ResetPasswordVerifyRules = {
 export const UpdateUserProfileRules = {
     body: Joi.object().keys({
         fullname: Joi.string(),
-        user_photo: Joi.string(),
+        profile_photo: Joi.string(),
     })
-    .or('fullname','user_photo') // atleast one must exists
+    .or('fullname','profile_photo') // atleast one must exists
+    .required(),
+}
+
+export const UserPhotUploadUrlRules = {
+    body: Joi.object().keys({
+        type: Joi.string().required(),
+        size: Joi.number().integer().min(1).required(), // TODO: add a max size
+    })
     .required(),
 }
