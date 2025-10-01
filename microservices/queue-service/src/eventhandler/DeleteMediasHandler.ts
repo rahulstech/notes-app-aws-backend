@@ -31,38 +31,32 @@ export class DeleteMediasHandler implements EventHandler {
       return { consumed: message };
     }
 
-    if (attempt >= MAX_ATTEMPT) {
-      logAttemptExhausted({ keys }, "DeleteMediasHandler");
-      return { consumed: message };
-    }
+    let requeue: QueueMessage | undefined;
     
     try {
       const { unsuccessful } = await this.noteRepository.deleteMediasByKey({
         keys,
       });
       if (unsuccessful?.length) {
-        return {
-          consumed: message,
-          // retry with unsuccessful keys
-          requeue: createQueueServiceMessage(QueueMessageEventType.DELETE_MEDIAS, { keys: unsuccessful }, attempt + 1),
-        };
+        requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_MEDIAS, { keys: unsuccessful }, attempt + 1);
       }
     } catch (err) {
       const repoError = err as AppError;
       if (repoError.operational && repoError.retriable) {
         // retry with same keys
-        return {
-          consumed: message,
-          requeue: createQueueServiceMessage(
-            QueueMessageEventType.DELETE_MEDIAS, 
-            { keys }, 
-            attempt + 1
-          ),
-        };
+        requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_MEDIAS,{ keys },attempt + 1);
       }
     }
 
+    if (requeue && attempt === MAX_ATTEMPT) {
+      logAttemptExhausted({ keys }, "DeleteMediasHandler");
+      requeue = undefined;
+    }
+
     // Non-retriable or unexpected error → consume
-    return { consumed: message };
+    return { 
+      consumed: message,
+      requeue,
+    };
   }
 }

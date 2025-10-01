@@ -12,7 +12,7 @@ const {
   MAX_ALLOWED_MEDIAS_SIZE_BYTES
 } = ENVIRONMENT;
 
-export const CreateNotesRule = joi.object().keys({
+export const CreateNotesRule = {
   body: joi.object().keys({
     notes: joi
       .array().items(
@@ -29,16 +29,16 @@ export const CreateNotesRule = joi.object().keys({
       .max(MAX_BATCH_CREATE_NOTE_COUNT)
       .required(),
   }),
-});
+};
 
-export const GetNotesRule = joi.object().keys({
+export const GetNotesRule = {
   query: {
     limit: joi.number().integer().min(1),
-    pageMark: joi.string(),
+    pageMark: joi.string().optional(),
   },
-});
+};
 
-export const UpdateNotesRule = joi.object().keys({
+export const UpdateNotesRule = {
   body: {
     notes: joi
       .array()
@@ -54,9 +54,9 @@ export const UpdateNotesRule = joi.object().keys({
       .max(MAX_BATCH_UPDATE_NOTE_COUNT)
       .required(),
   },
-});
+};
 
-export const DeleteNotesRule = joi.object().keys({
+export const DeleteNotesRule = {
   body: joi.object({
     SKs: joi.array().items(joi.string())
       .min(1)
@@ -64,17 +64,17 @@ export const DeleteNotesRule = joi.object().keys({
       .required(),
   })
   .rename('note_ids','SKs')
-});
+};
 
 
-export const NoteIdParameterRule = joi.object().keys({
+export const NoteIdParameterRule = {
   params: joi.object().keys({
       note_id: joi.string().required(),
     })
     .required(),
-});
+};
 
-export const AddNoteMediasRule = joi.object().keys({
+export const AddNoteMediasRule = {
   body: joi.object().keys({
     data: joi.array().items(joi.object({
         SK: joi.string(),
@@ -93,9 +93,9 @@ export const AddNoteMediasRule = joi.object().keys({
     .max(MAX_BATCH_ADD_MEDIAS_COUNT)
     .required()
   })
-});
+};
 
-export const GetNoteMediaUploadUrlRule = joi.object().keys({
+export const GetNoteMediaUploadUrlRule = {
   body: joi.object().keys({
     data: joi.array().items(joi.object({
         SK: joi.string(),
@@ -109,9 +109,9 @@ export const GetNoteMediaUploadUrlRule = joi.object().keys({
     .max(MAX_BATCH_GET_MEDIA_UPLOAD_URL_COUNT)
     .required()
   })
-});
+};
 
-export const RemoveNoteMediasRule = joi.object().keys({
+export const RemoveNoteMediasRule = {
   body: joi.object().keys({
     data: joi.array().items(joi.object({
         SK: joi.string().required(),
@@ -125,5 +125,5 @@ export const RemoveNoteMediasRule = joi.object().keys({
     .max(MAX_BATCH_REMOVE_MEDIAS_COUNT)
     .required()
   })
-});
+};
 

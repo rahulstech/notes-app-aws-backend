@@ -5,7 +5,8 @@ import { ChangeEmailInput, ChangePasswordInput, GetUserPhotoUploadUrlInput,
          GetUserProfileInput, ForgotPasswordInput, ForgotPasswordOutput, ChangeEmailOutput,
          UpdateTokenInput,
          DeleteUserInput,
-         UpdateUserProfileOutput
+         UpdateUserProfileOutput,
+         UpdateProfilePhotoInput
         } from "./types";
 
 export interface AuthRepository {
@@ -30,6 +31,8 @@ export interface AuthRepository {
 
     getProfilePhotoUploadUrl(input: GetUserPhotoUploadUrlInput): Promise<GetUserPhotoUploadUrlOutput>;
 
+    isProfilePhotoKey(key: string): boolean;
+
     /* Update */
 
     forgotPassword(input: ForgotPasswordInput): Promise<ForgotPasswordOutput>;
@@ -40,6 +43,8 @@ export interface AuthRepository {
 
     updateUserProfile(input: UpdateUserProfileInput): Promise<UpdateUserProfileOutput>;
 
+    updateProfilePhoto(key: string): Promise<void>;
+
     removeProfilePhoto(accessToken: string): Promise<void>;
 
     updateTokens(input: UpdateTokenInput): Promise<UpdateTokenOutput>;
@@ -47,4 +52,6 @@ export interface AuthRepository {
     /* Delete */
 
     deleteUser(input: DeleteUserInput): Promise<void>;
+
+    deleteProfilePhotos(keys: string[]): Promise<string[]>;
 }

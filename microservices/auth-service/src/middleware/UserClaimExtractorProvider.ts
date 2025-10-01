@@ -1,19 +1,21 @@
-import { ENVIRONMENT } from "@notes-app/common";
+import { ENVIRONMENT, LOGGER } from "@notes-app/common";
 import { ApiGatewayUserClaimExtractor, DefaultUserClaimExtractor, UserClaim, UserClaimExtractorProvider } from "@notes-app/express-common";
-import { Request } from "express";
 import jwt from 'jsonwebtoken';
+import { AuthApiRequest } from "../types";
 
 const { NODE_ENV } = ENVIRONMENT;
 
-function devUserClaimExtractor(req: Request): UserClaim | null {
-    const idToken = req.headers['x-id-token'];
-    if (!idToken) {
+function devUserClaimExtractor(req: AuthApiRequest): UserClaim | null {
+    const accessToken = req.accessToken;
+    LOGGER.logDebug(`obtain accessToken from request`, { tag: "devUserClaimExtractor", accessToken });
+
+    if (!accessToken) {
         return null;
     }
-    const payload = jwt.decode(idToken); // returns only payload
-    if (!payload) {
-        return null;
-    }
+    
+    const payload = jwt.decode(req.accessToken);
+    LOGGER.logInfo("decode accessToken", { tag: "devUserClaimExtractor", payload });
+
     return {
         userId: payload.sub,
     }

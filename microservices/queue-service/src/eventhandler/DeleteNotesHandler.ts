@@ -31,11 +31,7 @@ export class DeleteNotesHandler implements EventHandler {
             return { consumed: message };
         }
 
-        // Max attempts reached
-        if (attempt >= MAX_ATTEMPT) {
-            logAttemptExhausted({ prefixes }, "DeleteNotesHandler");
-            return { consumed: message };
-        }
+        let requeue: QueueMessage | undefined;
 
         try {
             const { unsuccessful } = await this.noteRepository.deleteMediasByPrefixes({ 
@@ -44,29 +40,25 @@ export class DeleteNotesHandler implements EventHandler {
 
             if (unsuccessful?.length) {
                 // Some deletes failed → requeue only those
-                return {
-                    consumed: message,
-                    requeue: createQueueServiceMessage(
-                        QueueMessageEventType.DELETE_NOTES,
-                        { prefixes: unsuccessful },
-                        attempt + 1
-                    )
-                };
+                requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_NOTES,{ prefixes: unsuccessful },attempt + 1);
             }
         } catch (err) {
             const repoError = err as AppError;
             if (repoError.operational && repoError.retriable) {
-                return {
-                    consumed: message,
-                    requeue: createQueueServiceMessage(
-                        QueueMessageEventType.DELETE_NOTES,
-                        { prefixes },
-                        attempt + 1
-                    )
-                };
-            }   
+                requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_NOTES,{ prefixes },attempt + 1);
+            }  
         }
+
+        // Max attempts reached
+        if (requeue && attempt === MAX_ATTEMPT) {
+            logAttemptExhausted({ prefixes }, "DeleteNotesHandler");
+            return { consumed: message };
+        }
+
         // Non-retriable or unexpected error → consume
-        return { consumed: message };
+        return { 
+            consumed: message,
+            requeue,
+        };
     }
 }

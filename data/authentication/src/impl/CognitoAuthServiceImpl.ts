@@ -15,6 +15,7 @@ import {
     AdminGetUserCommand,
     AdminGetUserCommandOutput,
     GetUserCommandOutput,
+    AdminUpdateUserAttributesCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { AuthService } from "../AuthService";
 import {
@@ -364,13 +365,39 @@ export class CognitoAuthServiceImpl implements AuthService {
             LOGGER.logWarn('no attribute to update', { tag: LOG_TAG, method: 'updateUser'});
             return;
         }
+
+        LOGGER.logDebug('update user', { tag: LOG_TAG, UserAttributes });
+
+        // if userId exists then update via admin control
+        // if accessToken exists then update via user control
+        // first check for accessToken then userId
+        let cmd: any;
+        if (input.accessToken) {
+            cmd = new UpdateUserAttributesCommand({
+                AccessToken: input.accessToken,
+                UserAttributes,
+            });
+        }
+        else if (input.userId) {
+            cmd = new AdminUpdateUserAttributesCommand({
+                UserPoolId: this.userPoolId,
+                Username: input.userId,
+                UserAttributes,
+            })
+        }
+        else {
+            throw newAppErrorBuilder()
+                    .setHttpCode(401)
+                    .setCode(APP_ERROR_CODE.UNAUTHORIZED)
+                    .addDetails({
+                        description: "either userId or accessToken is required",
+                        context: "CognitoAuthServiceImpl#updateUser"
+                    })
+                    .build();
+        }
+
         try {
-            await this.client.send(
-                new UpdateUserAttributesCommand({
-                    AccessToken: input.accessToken,
-                    UserAttributes,
-                })
-            );
+            await this.client.send(cmd);
         } catch (error) {
             throw convertCognitoError(error);
         }
@@ -379,6 +406,8 @@ export class CognitoAuthServiceImpl implements AuthService {
     // generate new token
 
     public async issueToken(input: IssueTokenInput): Promise<IssueTokenOutput> {
+        LOGGER.logDebug("issue new token", { tag: LOG_TAG, method: "issueToken", input });
+        
         try {
             const { AuthenticationResult } = await this.client.send(
                 new InitiateAuthCommand({

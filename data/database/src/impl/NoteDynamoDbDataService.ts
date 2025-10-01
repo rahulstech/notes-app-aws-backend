@@ -27,10 +27,11 @@ import {
   UpdateNoteDataOutputItem,
 } from '../types';
 import { randomUUID } from 'crypto';
-import { createRecord, decodeBase64, encodeBase64, executeChunk, newAppErrorBuilder, pickExcept } from '@notes-app/common';
+import { createRecord, decodeBase64, encodeBase64, executeChunk, LOGGER, newAppErrorBuilder, pickExcept } from '@notes-app/common';
 import { convertDynamoDbError, DYNAMODB_ERROR_CODES } from '../errors';
 import { fromNoteDBItem, toNoteDBItem } from '../helpers';
 
+const LOG_TAG = "NoteDynamoDbDataService";
 const NOTE_ID_PREFIX = 'NID-';
 const SK_NGID_NID_MAP = "_NGID_NID_MAP_";
 const ATTRIBUTE_NGIDS_MAP = "ngids";
@@ -406,6 +407,8 @@ export class NoteDynamoDbDataService implements NoteDataService {
     // filter medias by media global_id which does not exist
     const { nonExistingMedias, existingMedias } = await this.filterMedias(inputs,mediaItems);
 
+    LOGGER.logDebug("filter result existing and non-exisiting notes", { tag: LOG_TAG, existingMedias, nonExistingMedias });
+
     if (nonExistingMedias.length > 0) {
       // adding new medias must not exceed the per note allowed max media count
       if (currentMediaCount + nonExistingMedias.length > this.maxMediasPerItem) {
@@ -470,9 +473,16 @@ export class NoteDynamoDbDataService implements NoteDataService {
         ExpressionAttributeValues: marshall(ExpressionAttributeValues),
         ReturnValues: 'UPDATED_NEW'
       }));
-      // TODO: can Attributes be undefined while there is not UpdateItem error occurred?
-      const { medias } = unmarshall(Attributes!);
-      return Object.values(medias) as NoteMediaItem[];
+      // TODO: can Attributes be undefined
+      const { medias: savedMedias } = unmarshall(Attributes!);
+      // with ReturnValue = 'UDATED_NEW' it returns the whole medias attribute of note after update
+      // not just those which are added to medias. therefore need to filter those newly added media item 
+      // and returns those only from this method
+      const result: NoteMediaItem[] = [];
+      for (const media of medias) {
+        result.push(savedMedias[media.media_id]);
+      }
+      return result;
     }
     catch(error){
       throw convertDynamoDbError(error);

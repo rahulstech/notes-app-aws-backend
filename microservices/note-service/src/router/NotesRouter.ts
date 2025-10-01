@@ -11,7 +11,7 @@ import {
 } from './NoteRouterValidationRule';
 import { catchError, validateRequest } from '@notes-app/express-common';
 import { NoteApiExpressRequest } from '../types';
-import { newAppErrorBuilder } from '@notes-app/common';
+import { APP_ERROR_CODE, newAppErrorBuilder } from '@notes-app/common';
 
 const router = Router();
 
@@ -19,7 +19,8 @@ router.use((req: NoteApiExpressRequest, res: Response, next: NextFunction) => {
   if (!req.userClaim) {
     const error = newAppErrorBuilder()
                   .setHttpCode(401)
-                  .setOperational(true)
+                  .setCode(APP_ERROR_CODE.UNAUTHORIZED)
+                  .setRetriable(false)
                   .build();
     next(error);
   }
@@ -44,7 +45,7 @@ router
     })
   )
   .get(
-    validateRequest(GetNotesRule),
+    validateRequest(GetNotesRule,['query']),
     catchError(async (req: NoteApiExpressRequest, res: Response) => {
       const { limit, pageMark } = req.validValue.query;
       const output = await req.noteRepository.getNotes({
@@ -133,7 +134,7 @@ router.use('/medias', mediasRouter);
 // path: /notes/:note_id
 
 router.get('/:note_id',
-  validateRequest(NoteIdParameterRule), 
+  validateRequest(NoteIdParameterRule,['params']), 
   catchError(async (req: NoteApiExpressRequest, res: Response) => {
     const { note_id } = req.validValue.params;
     const output = await req.noteRepository.getNote({

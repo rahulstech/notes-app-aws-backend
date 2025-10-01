@@ -250,9 +250,10 @@ export class NoteRepositoryImpl implements NoteRepository {
 
   private convertToNoteMediaItem(PK: string, SK: string, input: Pick<NoteMediaItem,'global_id'|'type'|'size'>): NoteMediaItem {
     const { global_id, type, size } = input;
-    const key = createNoteMediaKey({ user_id: PK, note_id: SK, media_id: global_id });
+    const media_id = encodeBase64(global_id);
+    const key = createNoteMediaKey({ user_id: PK, note_id: SK, media_id });
     return {
-      media_id: encodeBase64(global_id),
+      media_id,
       global_id,
       key,
       url: this.storage.getMediaUrl(key),
@@ -286,6 +287,10 @@ export class NoteRepositoryImpl implements NoteRepository {
     catch(error) {
       throw convertNoteRepositoryError(error);
     }
+  }
+
+  public isNoteMediaKey(key: string): boolean {
+    return key.startsWith(DIR_PREFIX_NOTE_MEDIAS);
   }
 
   private async generateMediaUploadUrls(PK: string, SK: string, media_ids: string[]): Promise<GetMediaUploadUrlItemOutput> {

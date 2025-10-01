@@ -135,6 +135,8 @@ export class NoteSQSQueueService implements NoteQueueService {
       };
     }
 
+    LOGGER.logDebug('parse raw message', { tag: LOG_TAG, method: "parseRawMessage", message: Body });
+
     try {
       let rawSource: string = QueueMessageSourceType.UNKNOWN;
       let rawEvent: string = QueueMessageEventType.UNKNOWN;

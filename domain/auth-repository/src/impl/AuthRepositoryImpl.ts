@@ -272,6 +272,9 @@ export class AuthRepositoryImpl implements AuthRepository {
         }
     } 
 
+    public isProfilePhotoKey(key: string): boolean {
+        return key.startsWith(DIR_PREFIX_USER_PHOTOS);
+    }
     /* update user */
 
     // update password
@@ -317,37 +320,38 @@ export class AuthRepositoryImpl implements AuthRepository {
     // update profile
 
     public async updateUserProfile(input: UpdateUserProfileInput): Promise<UpdateUserProfileOutput> {
-        // if input contains profile_photo then check the key exists or not
-        if (input.profile_photo) {
-            let exists = false;
-            try {
-                exists = await this.storage.isKeyExists(input.profile_photo);
-            }
-            catch(error) {
-                throw convertAuthRepositoryError(error);
-            }
-            if (!exists) {
-                throw newAppErrorBuilder()
-                        .setHttpCode(400)
-                        .setCode(APP_ERROR_CODE.NOT_FOUND)
-                        .addDetails({
-                            description: "profile photo does not exists",
-                            context: "updateUserProfile",
-                            reason: input.profile_photo
-                        })
-                        .build()
-
-            }
-            const url = this.storage.getMediaUrl(input.profile_photo);
-            input.profile_photo = url;
-        }
-
         try {
             await this.authService.updateUser(input);
             return {
                 fullname: input.fullname,
-                profile_photo: input.profile_photo,
             };
+        }
+        catch(error) {
+            throw convertAuthRepositoryError(error);
+        }
+    }
+
+    // update profile photo
+
+    public async updateProfilePhoto(key: string): Promise<void> {
+        const [prefix,userId,_] = key.split('/');
+        if (prefix !== DIR_PREFIX_USER_PHOTOS) {
+            // key is not a valid profile_photo
+            throw newAppErrorBuilder()
+                    .setHttpCode(400)
+                    .setCode(APP_ERROR_CODE.BAD_REQUEST)
+                    .addDetails({
+                        description: "invalid profile_photo key",
+                        context: "AuthRepositoryImpl#updateProfilePhoto",
+                        reason: key
+                    })
+                    .build();
+        }
+        try {
+            await this.authService.updateUser({
+                userId,
+                profile_photo: this.storage.getMediaUrl(key),
+            });
         }
         catch(error) {
             throw convertAuthRepositoryError(error);
@@ -357,18 +361,24 @@ export class AuthRepositoryImpl implements AuthRepository {
     // remove profile photo
 
     public async removeProfilePhoto(accessToken: string): Promise<void> {
+        // get profile_photo of user
         const { profile_photo } = await this.getUserProfile({ accessToken });
 
-        // if profile_photo exists then enuque delete event
+        // if profile_photo exists then delete profile_photo value and enqueue deleting event
         if (profile_photo) {
-            // remove profile photo from db
-            await this.updateUserProfile({
-                accessToken,
-                profile_photo: "",
-            });
+            try {
+                // delete profile_photo value
+                await this.authService.updateUser({
+                    accessToken,
+                    profile_photo: null,
+                });
 
-            // enqueue a delete profile photo event
-            this.enqueueDeleteProfilePhoto(profile_photo);
+                // enqueue a delete profile photo event
+                this.enqueueDeleteProfilePhoto(profile_photo);
+            }
+            catch(error) {
+                throw convertAuthRepositoryError(error);
+            }
         }
     }
 
@@ -391,6 +401,7 @@ export class AuthRepositoryImpl implements AuthRepository {
     // regenerate tokens
 
     public async updateTokens(input: UpdateTokenInput): Promise<UpdateTokenOutput> {
+        LOGGER.logDebug("update token", { tag: LOG_TAG, method: "updateToken", input });
         try {
             return await this.authService.issueToken({ 
                 refreshToken: input.refreshToken
@@ -432,6 +443,15 @@ export class AuthRepositoryImpl implements AuthRepository {
         }
         catch(error) {
             LOGGER.logFatal(error, { tag: LOG_TAG, method: "enqueueDeleteUser", userId });
+        }
+    }
+
+    public async deleteProfilePhotos(keys: string[]): Promise<string[]> {
+        try {
+            return await this.storage.deleteMultipleObjects(keys);
+        }
+        catch(error) {
+            throw convertAuthRepositoryError(error);
         }
     }
 }

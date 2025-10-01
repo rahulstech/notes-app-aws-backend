@@ -88,9 +88,7 @@ export const ResetPasswordVerifyRules = {
 export const UpdateUserProfileRules = {
     body: Joi.object().keys({
         fullname: Joi.string(),
-        profile_photo: Joi.string(),
     })
-    .or('fullname','profile_photo') // atleast one must exists
     .required(),
 }
 

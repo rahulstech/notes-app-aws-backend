@@ -3,14 +3,21 @@ NoteQueueService,
 QueueMessage,
 QueueMessageEventType,
 } from '@notes-app/queue-service';
-import { EventHandler, HandleEventOutput } from './types';
+import { EventHandlerRegistry, HandleEventOutput, QueueAppConfig } from './types';
 import { AppError, LOGGER } from '@notes-app/common';
 
-export class App {
+const LOG_TAG = "QueueApp";
+
+export class QueueApp {
+  private queueService: NoteQueueService;
+  private handlers: EventHandlerRegistry;
+
   constructor(
-    private queueService: NoteQueueService,
-    private handlers: Record<QueueMessageEventType, EventHandler>
-  ) {}
+    config: QueueAppConfig
+  ) {
+    this.queueService = config.queueFactory.createNoteQueueService();
+    this.handlers = config.handlers;
+  }
 
   private mapByEventType(messages: QueueMessage[]): Record<QueueMessageEventType,QueueMessage[]> {
     return messages.reduce((acc, message) => {

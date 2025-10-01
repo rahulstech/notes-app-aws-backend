@@ -42,7 +42,7 @@ export interface NoteMediaKeyParts {
 }
 
 export function createNoteMediaKey(keyparts: NoteMediaKeyParts): string {
-    const { user_id, note_id, media_id  } = keyparts;
+    const { user_id, note_id, media_id } = keyparts;
     const parts = ['medias',user_id,note_id];
     if (media_id) {
         parts.push(media_id)

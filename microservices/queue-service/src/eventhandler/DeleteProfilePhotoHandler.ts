@@ -1,15 +1,15 @@
-// DeleteProfilePhotoHandler.ts
 import { QueueMessage, QueueMessageEventType, QueueMessageSourceType } from "@notes-app/queue-service";
 import { EventHandler, HandleEventOutput, MAX_ATTEMPT } from "../types";
-import { NoteObjectService } from "@notes-app/storage-service";
 import { createQueueServiceMessage, logAttemptExhausted } from "../helpers";
+import { AuthRepository } from "@notes-app/auth-repository";
+import { AppError, LOGGER } from "@notes-app/common";
 
 const LOG_TAG = "DeleteProfilePhotoHandler";
 
 export class DeleteProfilePhotoHandler implements EventHandler {
 
     constructor(
-        private storage: NoteObjectService
+        private authRepository: AuthRepository
     ) {}
 
     public async handle(messages: QueueMessage[]): Promise<HandleEventOutput> {
@@ -86,18 +86,26 @@ export class DeleteProfilePhotoHandler implements EventHandler {
     }
 
     private async deleteProfilePhotos(keys: string[], attempt: number = 1): Promise<QueueMessage | null> {
-        const unsuccessful: string[] = await this.storage.deleteMultipleObjects(keys);
-        if (unsuccessful && unsuccessful.length > 0) {
-            if (attempt === MAX_ATTEMPT) {
-                logAttemptExhausted({ keys }, LOG_TAG);
-                return null;
+        let requeue: QueueMessage = null;
+        try {
+            const unsuccessful: string[] = await this.authRepository.deleteProfilePhotos(keys);
+            if (unsuccessful && unsuccessful.length > 0) {
+                requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_PROFILE_PHOTO,unsuccessful,attempt);
             }
-            return createQueueServiceMessage(
-                QueueMessageEventType.DELETE_PROFILE_PHOTO,
-                keys,
-                attempt
-            );
         }
-        return null;
+        catch(error) {
+            const repoerror = error as AppError;
+            LOGGER.logError(repoerror,{ tag: LOG_TAG });
+            if (repoerror.retriable) {
+                requeue = createQueueServiceMessage(QueueMessageEventType.DELETE_PROFILE_PHOTO,keys,attempt);
+            }
+        }
+
+        if (requeue !== null && attempt === MAX_ATTEMPT) {
+            logAttemptExhausted({ keys }, LOG_TAG);
+            return null;
+        }
+        
+        return requeue;
     }
 }

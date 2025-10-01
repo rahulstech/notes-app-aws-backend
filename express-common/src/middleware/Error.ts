@@ -61,7 +61,7 @@ export function expressErrorHandler(): ErrorRequestHandler {
 
     const appError = convertToAppError(error);
 
-    LOGGER.logError(appError.toJSON());
+    LOGGER.logError("api error", { error: appError });
 
     const errorResponse: ErrorResponse = {
       code: appError.code,

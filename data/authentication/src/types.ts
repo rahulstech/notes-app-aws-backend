@@ -116,9 +116,10 @@ export interface ResendUsernameVerificationCodeInput extends AuthenticatedInput 
 export interface ResendUsernameVerificationCodeOutput extends VertificationCodeOutput {}
 
 // Update User Info
-export interface UpdateUserInput extends AuthenticatedInput {
+export interface UpdateUserInput extends Partial<AuthenticatedInput> {
     fullname?: string;
-    profile_photo?: string;
+    profile_photo?: string | null;
+    userId?: string;
 }
 
 // Issue Token

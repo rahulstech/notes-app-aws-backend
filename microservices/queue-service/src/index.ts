@@ -3,33 +3,38 @@ import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
 import { NoteQueueServiceFactoryImpl, QueueMessage, QueueMessageEventType } from "@notes-app/queue-service";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
-import { EventHandler } from "./types";
+import { EventHandlerRegistry } from "./types";
 import { buildEventHandlerRegistry } from "./eventhandler";
-import { App } from "./app";
+import { QueueApp } from "./app";
+import { AuthRepositoryFactoryImpl } from "@notes-app/auth-repository";
+import { AuthServiceFactoryImpl } from "@notes-app/authentication";
 
 // ----------------------
 // Setup (cold start init)
 // ----------------------
 const queueFactory = new NoteQueueServiceFactoryImpl();
-const storageFactory =   new NoteObjectServiceFactoryImpl();
-const repositoryFactory = new NoteRepositoryFactoryImpl(
+const storageFactory = new NoteObjectServiceFactoryImpl();
+const noteRepositoryFactory = new NoteRepositoryFactoryImpl(
   new NoteDataServiceFactoryImpl(),
   storageFactory,
   queueFactory
 );
+const authRepositoryFactory = new AuthRepositoryFactoryImpl(
+  new AuthServiceFactoryImpl(),
+  queueFactory,
+  storageFactory 
+)
 
-const queueService = queueFactory.createNoteQueueService();
-const storageService = storageFactory.createNoteObjectService();
-const noteRepository = repositoryFactory.createNoteRepository();
+const handlers: EventHandlerRegistry = buildEventHandlerRegistry({authRepositoryFactory,noteRepositoryFactory});
 
-const handlerRegistry: Record<QueueMessageEventType, EventHandler> = buildEventHandlerRegistry(storageService,noteRepository);
-
-const app = new App(queueService, handlerRegistry);
+const app = new QueueApp({queueFactory, handlers});
 
 // ----------------------
 // Lambda Handler
 // ----------------------
 export const handler = async (event: SQSEvent): Promise<void> => {
+
+  const queueService = queueFactory.createNoteQueueService();
 
   // Convert SQS records into queueService-style messages
   const messages: QueueMessage[] = event.Records.map((record: SQSRecord) => queueService.parseRawMessage({

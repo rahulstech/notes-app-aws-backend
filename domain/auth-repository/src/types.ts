@@ -1,4 +1,4 @@
-import { IssueTokenOutput, LogInOutput, UpdateUserInput } from "@notes-app/authentication";
+import { IssueTokenInput, IssueTokenOutput, LogInOutput, UpdateUserInput } from "@notes-app/authentication";
 
 interface AccessTokenInput {
     accessToken: string;
@@ -94,16 +94,20 @@ export interface ChangeEmailInput extends AccessTokenInput {
 
 export interface ChangeEmailOutput extends CodeDeliveryEmailOutput {}
 
-export type UpdateUserProfileInput  = UpdateUserInput;
+export interface UpdateUserProfileInput {
+    accessToken: string;
+    fullname?: string;
+};
 
 export interface UpdateUserProfileOutput {
     fullname?: string;
-    profile_photo?: string;
 }
 
-export interface UpdateTokenInput {
-    refreshToken: string;
+export interface UpdateProfilePhotoInput {
+    key: string;
 }
+
+export type UpdateTokenInput = IssueTokenInput;
 
 export type UpdateTokenOutput = IssueTokenOutput;
 

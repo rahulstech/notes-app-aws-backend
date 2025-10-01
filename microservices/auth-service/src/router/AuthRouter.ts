@@ -77,7 +77,9 @@ authRouter.post('/refresh',
     validateRequest(RefreshRules),
     catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
-        const tokens = await req.authRepository.updateTokens(body.refreshToken);
+        const tokens = await req.authRepository.updateTokens({
+            refreshToken: body.refreshToken,
+        });
         res.json(tokens);
     })
 )

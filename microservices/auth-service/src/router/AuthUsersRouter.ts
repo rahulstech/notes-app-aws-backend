@@ -67,7 +67,45 @@ usersRouter.post('/email/verify',
         res.sendStatus(200);
     }));
 
-usersRouter.get('/profile-photo-upload-url',
+const profileRoutes = Router({
+    mergeParams: true,
+});
+
+profileRoutes.route('/')
+    .get( 
+    catchError(async (req: AuthApiRequest, res: Response) => {
+        const profile = await req.authRepository.getUserProfile({
+            accessToken: req.accessToken,
+        });
+        res.json({ profile });
+    }))
+    .patch(
+        validateRequest(UpdateUserProfileRules),
+        catchError(async (req: AuthApiRequest, res: Response) => {
+            const { body } = req.validValue;
+            const output = await req.authRepository.updateUserProfile({
+                accessToken: req.accessToken,
+                fullname: body.fullname,
+            });
+            res.json(output);
+        }))
+    .delete(catchError(async (req: AuthApiRequest, res: Response) => {
+        await req.authRepository.deleteUser({
+            accessToken: req.accessToken,
+        });
+        res.sendStatus(200);
+    })
+)
+
+usersRouter.get('/', 
+    catchError(async (req: AuthApiRequest, res: Response) => {
+        const profile = await req.authRepository.getUserProfile({
+            accessToken: req.accessToken,
+        });
+        res.json({ profile });
+    }));
+
+profileRoutes.get('/photo/uploadurl',
     validateRequest(UserPhotUploadUrlRules),
     catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
@@ -80,38 +118,13 @@ usersRouter.get('/profile-photo-upload-url',
     })
 )
 
-usersRouter.get('/profile', 
-    catchError(async (req: AuthApiRequest, res: Response) => {
-        const profile = await req.authRepository.getUserProfile({
-            accessToken: req.accessToken,
-        });
-        res.json({ profile });
-    }));
-
-usersRouter.route('/')
-    .patch(
-        validateRequest(UpdateUserProfileRules),
-        catchError(async (req: AuthApiRequest, res: Response) => {
-            const { body } = req.validValue;
-            const output = await req.authRepository.updateUserProfile({
-                accessToken: req.accessToken,
-                fullname: body.fullname,
-                profile_photo: body.profile_photo,
-            });
-            res.json(output);
-        }))
-    .delete(catchError(async (req: AuthApiRequest, res: Response) => {
-        await req.authRepository.deleteUser({
-            accessToken: req.accessToken,
-        });
-        res.sendStatus(200);
-    }))
-
-usersRouter.delete('/profile-photo', 
+profileRoutes.delete('/photo', 
     catchError(async (req: AuthApiRequest, res: Response) => {
         await req.authRepository.removeProfilePhoto(req.accessToken);
         res.sendStatus(200);
     })
 )
+
+usersRouter.use("/profile", profileRoutes);
 
 export { usersRouter }

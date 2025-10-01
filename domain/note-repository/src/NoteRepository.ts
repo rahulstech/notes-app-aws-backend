@@ -43,9 +43,11 @@ export interface NoteRepository {
 
   addMedias(input: AddMediasInput): Promise<AddMediasOutput>;
 
-  getMediaUploadUrl(input: GetMediaUploadUrlInput): Promise<GetMediaUploadUrlOutput>
+  getMediaUploadUrl(input: GetMediaUploadUrlInput): Promise<GetMediaUploadUrlOutput>;
 
-  updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput>
+  isNoteMediaKey(key: string): boolean;
+
+  updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput>;
 
   removeMedias(input: RemoveMediasInput): Promise<RemoveMediasOutput>;
 
