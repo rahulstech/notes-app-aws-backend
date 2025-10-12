@@ -1,9 +1,5 @@
 import { AppError } from '@notes-app/common'
 
-// interface ErrorItem {
-//   error?: AppError;
-// }
-
 export enum NoteMediaStatus {
   AVAILABLE = 'AVAILABLE',
   NOT_AVAILABLE = 'NOT_AVAILABLE',
@@ -35,7 +31,7 @@ export type ShortNoteItem = Omit<NoteItem, "content">;
 
 export type CreateNoteDataInputItem = Pick<NoteItem,'global_id'|'title'|'content'|'short_content'|'timestamp_created'|'timestamp_modified'>;
 
-export type CreateNoteDataOutputItem = Pick<NoteItem, 'SK'|'global_id'|'title'|'short_content'|'content'|'timestamp_created'|'timestamp_modified'> & { error?: AppError };
+export type CreateNoteDataOutputItem = Pick<NoteItem,'global_id'|'title'|'short_content'|'content'|'timestamp_created'|'timestamp_modified'> & { error?: AppError };
 
 export interface CreateNoteDataInput {
   PK: string;

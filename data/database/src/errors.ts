@@ -1,4 +1,4 @@
-import { AppError, newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "@notes-app/common";
 
 export const DYNAMODB_ERROR_CODES = {
 
@@ -16,16 +16,14 @@ export const DYNAMODB_ERROR_CODES = {
   CONFIGURATION_ERROR: 1010,
 
   // public error: can share generic error details via api response
-  NOTE_NOT_FOUND: 1011,
   TOO_MANY_MEDIA_ITEMS: 1012,
-  MEDIA_ITEM_NOT_FOUND: 1013,
 };
 
 export function convertDynamoDbError(error: any): AppError {
   const errorBuilder = newAppErrorBuilder();
 
   const errorName = error.name || "UnknownError";
-  const errorMessage = error.message || "An unknown DynamoDB error occurred";
+  const errorMessage = error.message;
 
   switch (errorName) {
     case "ConditionalCheckFailedException":
@@ -138,9 +136,33 @@ export function convertDynamoDbError(error: any): AppError {
         .addDetails({
           description: "Unknown DynamoDB error occurred",
           context: errorName,
-          reason: errorMessage,
+          reason: error,
         })
         .setOperational(false)
         .build();
   }
 }
+
+export function createNoteNotFoundError(method: string, context: {PK: string; SK: string}): AppError {
+  return newAppErrorBuilder()
+            .setHttpCode(404)
+            .setCode(APP_ERROR_CODE.NOT_FOUND)
+            .addDetails({
+              description: "note not found",
+              context: { method: `NoteDynamoDbDataService#${method}`, ...context },
+            })
+            .build()
+} 
+
+export function createTooManyMediaItemError(method: string, context?: any): AppError {
+  return newAppErrorBuilder()
+            .setHttpCode(400)
+            .setCode(DYNAMODB_ERROR_CODES.TOO_MANY_MEDIA_ITEMS)
+            .addDetails({
+              description: "total media count exceeds accepted media count",
+              context: { method: `NoteDynamoDbDataService#${method}`, ...context }
+            })
+            .build()
+} 
+
+

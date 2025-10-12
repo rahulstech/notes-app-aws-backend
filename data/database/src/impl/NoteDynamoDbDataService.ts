@@ -6,7 +6,6 @@ import {
   BatchGetItemCommand,
   TransactWriteItemsCommand,
   DynamoDBClientConfig,
-  BatchGetItemCommandInput,
   BatchWriteItemCommand,
   WriteRequest,
   PutItemCommand,
@@ -27,22 +26,19 @@ import {
   UpdateNoteDataOutputItem,
 } from '../types';
 import { randomUUID } from 'crypto';
-import { createRecord, decodeBase64, encodeBase64, executeChunk, LOGGER, newAppErrorBuilder, pickExcept } from '@notes-app/common';
-import { convertDynamoDbError, DYNAMODB_ERROR_CODES } from '../errors';
-import { fromNoteDBItem, toNoteDBItem } from '../helpers';
+import { APP_ERROR_CODE, createRecord, decodeBase64, encodeBase64, LOGGER, newAppErrorBuilder, pickExcept } from '@notes-app/common';
+import { convertDynamoDbError, createNoteNotFoundError, createTooManyMediaItemError, DYNAMODB_ERROR_CODES } from '../errors';
+import { fromNoteDBItem } from '../helpers';
 
 const LOG_TAG = "NoteDynamoDbDataService";
 const NOTE_ID_PREFIX = 'NID-';
 const SK_NGID_NID_MAP = "_NGID_NID_MAP_";
 const ATTRIBUTE_NGIDS_MAP = "ngids";
 const NOTEITEM_PROJECTIONS = ['PK','SK','global_id','title','content','short_content','timestamp_created','timestamp_modified','medias'];
-const SHORTNOTEITEM_PROJECTIONS = ['PK','SK','global_id','title','short_content','timestamp_created','timestamp_modified'];
+const SHORTNOTEITEM_PROJECTIONS = ['SK','global_id','title','short_content','timestamp_created','timestamp_modified'];
 
 export interface NoteDynamoDbDataServiceOptions {
-  region?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  localEndpointUrl?: string;
+  client: DynamoDBClient,
   notesTableName: string;
   maxMediasPerItem: number;
 }
@@ -53,31 +49,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
   private notesTableName: string;
 
   constructor(options: NoteDynamoDbDataServiceOptions) {
-    const { localEndpointUrl, region, accessKeyId, secretAccessKey } = options;
-    
-    const isLocal = !!localEndpointUrl;
-    const isRemote = !!region && !!accessKeyId && !!secretAccessKey;
-
-    if (!isLocal && !isRemote) {
-      throw newAppErrorBuilder()
-            .setHttpCode(500)
-            .setCode(DYNAMODB_ERROR_CODES.CONFIGURATION_ERROR)
-            .addDetails("neither local nor remote configuration for dynamodb client provided")
-            .setOperational(false)
-            .build();
-    }
-
-    const config: DynamoDBClientConfig = {}
-    if (isLocal) {
-      config.endpoint = localEndpointUrl
-    }
-    else {
-      config.region = region;
-      config.credentials = { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey!}
-    }
-
-    const client = new DynamoDBClient(config);
-    this.client = client;
+    this.client = options.client;
     this.maxMediasPerItem = options.maxMediasPerItem;
     this.notesTableName = options.notesTableName;
   }
@@ -88,6 +60,14 @@ export class NoteDynamoDbDataService implements NoteDataService {
 
   // create notes
 
+  /**
+   * Creates multiple notes. First it checks by note global for existing note.
+   * Adds the notes for which global_id does not exists.
+   * 
+   * @param PK partision key i.e. user id
+   * @param inputs array of notes
+   * @returns newly created and matched exisiting notes
+   */
   public async createMultipleNotes(PK: string, inputs: CreateNoteDataInputItem[]): Promise<CreateNoteDataOutputItem[]> {
     try {
       // create global_id => noteitem map
@@ -102,14 +82,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
 
       // add new notes
-      const newNotes = await Promise.all(Object.values(gidNote).map(async (input) => {
-        const note = {
-          PK,
-          SK: this.createNoteId(),
-          ...input,
-        }
-        return await this.createSingleNote(note);
-      }));
+      const newNotes = await Promise.all(Object.values(gidNote).map(input => this.createSingleNote(PK,input)));
 
       return [...newNotes, ...existingNotes];
     }
@@ -140,14 +113,13 @@ export class NoteDynamoDbDataService implements NoteDataService {
                                             Key: marshall({ PK, SK: SK_NGID_NID_MAP})
                                           }));
       if (Item) { 
-        const ngids: Record<string,string> = unmarshall(Item).ngids;
+        const { ngids } = unmarshall(Item);
         const map: Record<string,string> = {};
-        global_ids.forEach(gid => {
-          const nid = ngids[gid];
-          if (nid) {
-            map[gid] = nid;
+        for(const gid of global_ids) {
+          if (ngids[gid]) {
+            map[gid] = ngids[gid];
           }
-        });
+        }
         return map;
       }
 
@@ -165,14 +137,6 @@ export class NoteDynamoDbDataService implements NoteDataService {
   }
 
   private async getNotesByNoteIds(PK: string, SKs: string[]): Promise<CreateNoteDataOutputItem[]> {
-    const request: BatchGetItemCommandInput = {
-      RequestItems: {
-        [this.notesTableName]: {
-          Keys: SKs.map((SK) => marshall({ PK, SK })),
-        },
-      },
-    };
-
     try {
       const { Responses } = await this.client.send(new BatchGetItemCommand({
         RequestItems: {
@@ -182,8 +146,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
         },
       }));
       if (Responses && Responses[this.notesTableName]) {
-        const items = Responses[this.notesTableName];
-        return items.map(item => pickExcept(fromNoteDBItem(item),['medias']) as CreateNoteDataOutputItem);
+        const items = Responses[this.notesTableName]
+                      .map(item => pickExcept(fromNoteDBItem(item),['PK','medias']) as CreateNoteDataOutputItem);
+        return items;
       }
     }
     catch(error) {
@@ -192,25 +157,26 @@ export class NoteDynamoDbDataService implements NoteDataService {
     return [];
   }
 
-  private async createSingleNote(note: NoteItem): Promise<CreateNoteDataOutputItem> {
+  private async createSingleNote(PK: string, input: CreateNoteDataInputItem): Promise<CreateNoteDataOutputItem> {
+    const item = { ...input, PK, SK: this.createNoteId(), medias: {} };
     const cmd = new TransactWriteItemsCommand({
       TransactItems: [
         {
           Put: {
             TableName: this.notesTableName,
-            Item: toNoteDBItem(note)
+            Item: marshall(item)
           }
         },
         {
           Update: {
             TableName: this.notesTableName,
-            Key: marshall({PK: note.PK, SK: SK_NGID_NID_MAP}),
+            Key: marshall({PK, SK: SK_NGID_NID_MAP}),
             UpdateExpression: `SET ${ATTRIBUTE_NGIDS_MAP}.#key = :value`,
             ExpressionAttributeNames: {
-              "#key": note.global_id
+              "#key": input.global_id
             },
             ExpressionAttributeValues: marshall({
-              ":value": note.SK
+              ":value": item.SK
             })
           }
         }
@@ -218,11 +184,11 @@ export class NoteDynamoDbDataService implements NoteDataService {
     })
     try {
       await this.client.send(cmd);
-      return note;
+      return pickExcept(item,['PK','medias']) as CreateNoteDataOutputItem;
     }
     catch(error) {
       return {
-        ...note,
+        ...input,
         error: convertDynamoDbError(error)
       }
     }
@@ -230,6 +196,15 @@ export class NoteDynamoDbDataService implements NoteDataService {
 
   // get all notes
 
+  /**
+   * Get multiple notes upto given limit for the user. notes are sorted 
+   * by timestamp_created in descending order.
+   * 
+   * @param PK partition key i.e. user id
+   * @param limit max no of notes
+   * @param pageMark the start of the next page
+   * @returns array of found notes, requested limit and pageMark if more notes available
+   */
   public async getNotes(PK: String, limit?: number, pageMark?: string): Promise<GetNotesOutput> {
     const Limit = Math.min(100,limit || 100); // get upto 100 items
     try {
@@ -239,7 +214,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
         ExpressionAttributeValues: marshall({
           ':pk': PK,
         }),
-        ProjectionExpression: SHORTNOTEITEM_PROJECTIONS.join(","),
+        ProjectionExpression: "SK,global_id,title,short_content,timestamp_created,timestamp_modified",
         Limit,
         ExclusiveStartKey: pageMark && JSON.parse(decodeBase64(pageMark)),
         IndexName: 'OrderNoteByCreatedIndex', // use index to use different sort key for ordering
@@ -287,8 +262,15 @@ export class NoteDynamoDbDataService implements NoteDataService {
     }
   }
 
-  // get note by id
-
+  /**
+   * Finds a note for the user by note id or throws AppError if not found.
+   * 
+   * @param PK partition key i.e. user id
+   * @param SK sort key i.e. note id
+   * @returns the note item
+   * @throws AppError note not found
+   *                  any error during query
+   */
   public async getNoteById(PK: string, SK: string): Promise<NoteItem> {
     try {
       const { Item } = await this.client.send(new GetItemCommand({
@@ -303,17 +285,18 @@ export class NoteDynamoDbDataService implements NoteDataService {
       throw convertDynamoDbError(error);
     }
 
-    throw newAppErrorBuilder()
-          .setHttpCode(404)
-          .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
-          .addDetails(`note with PK = ${PK} and SK = ${SK} not found`)
-          .setOperational(true)
-          .setRetriable(false)
-          .build();
+    throw createNoteNotFoundError("getNoteById", {PK,SK});
   }
 
-  // update notes
-
+  /**
+   * Updates a note
+   * 
+   * @param PK partition key i.e. user id
+   * @param input 
+   * @returns 
+   * @throws AppError note note not found (code - APP_ERROR_CODE.NOT_FOUND)
+   *                  any error occures during query
+   */
   public async updateSingleNote(PK: string, input: UpdateNoteDataInputItem): Promise<UpdateNoteDataOutputItem> {
     const { SK } = input;
     const SetExpressions: string[] = [];
@@ -339,7 +322,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
         TableName: this.notesTableName,
         Key: marshall({PK,SK}),
         UpdateExpression,
-        ConditionExpression: "SK = :SK", // it ensures that update if and only if the item exists
+        ConditionExpression: "PK = :PK AND SK = :SK", // it ensures that update if and only if the item exists
         ExpressionAttributeValues: marshall(ExpressionAttributeValues),
         ReturnValues: 'UPDATED_NEW'
       }));
@@ -351,18 +334,20 @@ export class NoteDynamoDbDataService implements NoteDataService {
     catch(error) {
       const dberror = convertDynamoDbError(error);
       if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) { 
-        throw newAppErrorBuilder()
-              .setHttpCode(404)
-              .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
-              .setRetriable(false)
-              .build()
+        throw createNoteNotFoundError("updateSingleNote",{PK,SK});
       }
       throw dberror;
     }
   }
 
-  // delete notes
-
+  /**
+   * Deletes multiple notes by id.
+   * 
+   * @param PK partition key i.e. user id
+   * @param SKs array of sort keys i.e. note ids
+   * @returns the note ids which are not deleted
+   * @throws AppError if any error occures during query
+   */
   public async deleteMultipleNotes(PK: string, SKs: string[]): Promise<DeleteMultipleNotesDataOutput> {
     const requests: WriteRequest[] = SKs.map(SK => ({
                                         DeleteRequest: {
@@ -371,12 +356,16 @@ export class NoteDynamoDbDataService implements NoteDataService {
                                       }));
     try {                                  
       const unprocessed: WriteRequest[] = await this.runBatchDeleteNotes(requests);
-      const unsuccessful: string[] = unprocessed.map(({DeleteRequest}) => unmarshall(DeleteRequest!.Key!).SK);
-      return { unsuccessful };
+      if (unprocessed.length > 0) {
+        return {
+          unsuccessful: unprocessed.map(({DeleteRequest}) => unmarshall(DeleteRequest!.Key!).SK)
+        }
+      }
     }
     catch(error) {
       throw convertDynamoDbError(error);
     }
+    return {};
   }
 
   private async runBatchDeleteNotes(requests: WriteRequest[], attempt: number = 1): Promise<WriteRequest[]> {
@@ -397,38 +386,46 @@ export class NoteDynamoDbDataService implements NoteDataService {
     return await this.runBatchDeleteNotes(unprocessed, ++attempt);
   }
 
-  // add medias
+  //////////////////////////////////////////////
+  ///               Note Media              ///
+  ////////////////////////////////////////////
 
+  /**
+   * Adds new medias for the note. At first it filters the medias by media global id.
+   * Only those medias are added for which media global id does not exists. Each media
+   * allows a max number of medias. If total media count exceeds that number then 
+   * none of the medias is added.
+   * 
+   * @param PK partition key i.e. user id
+   * @param SK sort key i.e. note id
+   * @param inputs medias to add
+   * @returns array of medias which are newly added and the matched exising ones
+   * @throws AppError if any error occures during query
+   */
   public async addNoteMedias(PK: string, SK: string, inputs: NoteMediaItem[]): Promise<NoteMediaItem[]> {
-    // get all the note medias
+    // get all the note medias for the note
     const mediaItems: Record<string, NoteMediaItem> = await this.getNoteMedias(PK,SK);
     const currentMediaCount: number = Object.keys(mediaItems).length;
 
-    // filter medias by media global_id which does not exist
+    // separate medias by existing and non-existing by media global_id
     const { nonExistingMedias, existingMedias } = await this.filterMedias(inputs,mediaItems);
 
-    LOGGER.logDebug("filter result existing and non-exisiting notes", { tag: LOG_TAG, existingMedias, nonExistingMedias });
+    LOGGER.logDebug("", { tag: LOG_TAG, method: "addNoteMedias", PK, SK, existingMedias, nonExistingMedias });
 
     if (nonExistingMedias.length > 0) {
       // adding new medias must not exceed the per note allowed max media count
       if (currentMediaCount + nonExistingMedias.length > this.maxMediasPerItem) {
-        throw newAppErrorBuilder()
-              .setHttpCode(400)
-              .setCode(DYNAMODB_ERROR_CODES.TOO_MANY_MEDIA_ITEMS)
-              .addDetails({
-                description: "total media count exceeds accepted media count",
-                context: "addNoteMedias",
-              })
-              .setRetriable(false)
-              .build();
+        throw createTooManyMediaItemError("addMedias",{PK,SK});
       }
 
       // update note
       const newMedias = await this.updateNoteMedias(PK,SK,nonExistingMedias);
+
+      // return newly added and matched existing medias
       return [...newMedias, ...existingMedias];
     }
 
-    // all medias already existing, return those exising medias
+    // all medias already exist, return those matched exising medias only
     return [...existingMedias];
   }
 
@@ -459,7 +456,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       const mediakeyname = `#mediakey${index}`;
       const mediavalname = `:mediaval${index}`;
       UpdateExpressions.push(`medias.${mediakeyname} = ${mediavalname}`);
-      ExpressionAttributeNames[mediakeyname] = encodeBase64(media.global_id);
+      ExpressionAttributeNames[mediakeyname] = media.media_id;
       ExpressionAttributeValues[mediavalname] = media;
     })
     const UpdateExpression = `SET ${UpdateExpressions.join(", ")}`;
@@ -473,7 +470,6 @@ export class NoteDynamoDbDataService implements NoteDataService {
         ExpressionAttributeValues: marshall(ExpressionAttributeValues),
         ReturnValues: 'UPDATED_NEW'
       }));
-      // TODO: can Attributes be undefined
       const { medias: savedMedias } = unmarshall(Attributes!);
       // with ReturnValue = 'UDATED_NEW' it returns the whole medias attribute of note after update
       // not just those which are added to medias. therefore need to filter those newly added media item 
@@ -489,8 +485,15 @@ export class NoteDynamoDbDataService implements NoteDataService {
     }
   }
 
-  // get medias
-
+  /**
+   * Get all medias of the note as map of media id to media.
+   * 
+   * @param PK partition key i.e. user id
+   * @param SK sort key i.e. note id
+   * @returns a map of media id and media item
+   * @throws AppError note not found
+   *                  any error during query
+   */
   public async getNoteMedias(PK: string, SK: string): Promise<Record<string,NoteMediaItem>> {
     try {
       const { Items } = await this.client.send(new QueryCommand({
@@ -510,15 +513,18 @@ export class NoteDynamoDbDataService implements NoteDataService {
     catch(error) {
       throw convertDynamoDbError(error);
     }
-    throw newAppErrorBuilder()
-          .setHttpCode(404)
-          .setCode(DYNAMODB_ERROR_CODES.NOTE_NOT_FOUND)
-          .setRetriable(false)
-          .build()
+    throw createNoteNotFoundError("getNoteMedias", {PK,SK});
   }
 
-  // update media staus
-
+  /**
+   * Update media when successfully uploaded to the storage.
+   * 
+   * @param PK partition key i.e. user id
+   * @param SK sort key i.e. note id
+   * @param items media item update details
+   * @throws AppError note not foud
+   *                  any error occures during query
+   */
   public async updateMediaStatus(PK: string, SK: string, items: UpdateMediaStatusInputItem[]): Promise<void> {
     const UpdateExpressions: string[] = [];
     const ExpressionAttributeNames: Record<string, string> = {
@@ -526,6 +532,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       '#status': 'status'
     };
     const AttributeValues: Record<string, any> = {
+      ":PK": SK,
       ":SK": SK,
     };
     items.forEach(({media_id,status}, index) => {
@@ -540,22 +547,27 @@ export class NoteDynamoDbDataService implements NoteDataService {
       await this.client.send(new UpdateItemCommand({
         TableName: this.notesTableName,
         Key: marshall({ PK, SK }),
-        ConditionExpression: "SK = :SK",
+        ConditionExpression: "PK = :PK AND SK = :SK",
         UpdateExpression: `SET ${UpdateExpressions.join(', ')}`,
         ExpressionAttributeNames,
         ExpressionAttributeValues: marshall(AttributeValues),
       }));
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      const dberror = convertDynamoDbError(error);
+      if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) {
+        throw createNoteNotFoundError("updateMediaStatus",{PK,SK});
+      }
+      throw dberror;
     }
   }
 
-  // remove medias
-
   /**
+   * Remove medias of the note by media ids
    * 
    * @returns deleted media keys
+   * @throws AppError note not found
+   *                  any error occures during query
    */
   public async removeNoteMedias(PK: string, SK: string, mediaIds: string[]): Promise<string[]> {
     try {
@@ -571,7 +583,12 @@ export class NoteDynamoDbDataService implements NoteDataService {
         TableName: this.notesTableName,
         Key: marshall({PK,SK}),
         UpdateExpression: `REMOVE ${UpdateExpressions.join(", ")}`,
+        ConditionExpression: "PK = :PK AND SK = :SK",
         ExpressionAttributeNames: MediasAttributeNames,
+        ExpressionAttributeValues: marshall({
+          ":PK": PK,
+          ":SK": SK
+        }),
         ReturnValues: 'UPDATED_OLD'
       }));
 
@@ -585,7 +602,11 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      throw convertDynamoDbError(error)
+      const dberror = convertDynamoDbError(error);
+      if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) {
+        throw createNoteNotFoundError("removeNoteMedias",{PK,SK});
+      }
+      throw dberror;
     }
 
     // either note by SK or medias by mediaId not found

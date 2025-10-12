@@ -4,11 +4,32 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "build:note-service": "nx run note-service:build:production",
-    "build:queue-service": "nx run queue-service:build:production",
+    "test:unit:auth-service": "nx test @notes-app/auth-service --configuration=unit",
+    "test:integration:auth-service": "nx test @notes-app/auth-service --configuration=integration",
+
+    "test:unit:database-service": "nx test @notes-app/database-service --configuration=unit",
+    "test:integration:database-service": "./scripts/test/integration/database-service.sh",
+
+    "test:unit:queue-service": "nx test @notes-app/queue-service --configuration=unit",
+    "test:integration:queue-service": "nx test @notes-app/queue-service --configuration=integration",
+
+    "test:unit:storage-service": "nx test @notes-app/storage-service --configuration=unit",
+    "test:integration:storage-service": "nx test @notes-app/storage-service --configuration=integration",
+
+    "test:unit:auth-repository": "nx test @note-app/auth-repository --configuration=unit",
+    "test:integration:auth-repository": "nx test @note-app/auth-repository --configuration=integration",
+
+    "test:unit:note-repository": "nx test @notes-app/note-repository --configuration=unit",
+    "test:integration:note-repository": "nx test @notes-app/note-repository --configuration=integration",
+
+
+    "dev:auth-service": "nx build auth-service && node --env-file=.env-DEV dist/microservices/auth-service/main.js",
     "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/main.js",
     "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js",
-    "dev:auth-service": "nx build auth-service && node --env-file=.env-DEV dist/microservices/auth-service/main.js"
+    
+    "build:auth-service": "nx run auth-service:build:production",
+    "build:note-service": "nx run note-service:build:production",
+    "build:queue-service": "nx run queue-service:build:production"
   },
   "repository": {
     "type": "git",
