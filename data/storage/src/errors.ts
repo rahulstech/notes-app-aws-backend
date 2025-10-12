@@ -1,16 +1,12 @@
-import { AppError, newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "@notes-app/common";
 
 export const S3_ERROR_CODES = {
-  UNKNOWN_S3_ERROR: 2000,
   NO_SUCH_BUCKET: 2001,
   NO_SUCH_KEY: 2002,
-  ACCESS_DENIED: 2003,
   SLOW_DOWN: 2004,
-  INTERNAL_ERROR: 2005,
-  SERVICE_UNAVAILABLE: 2006,
 };
 
-export function convertS3Error(error: any): AppError {
+export function convertS3Error(error: any, context?: any, httpStatusCode: number = 500): AppError {
   const errorBuilder = newAppErrorBuilder();
 
   const errorName = error?.name || "UnknownS3Error";
@@ -23,18 +19,20 @@ export function convertS3Error(error: any): AppError {
         .setCode(S3_ERROR_CODES.NO_SUCH_BUCKET)
         .addDetails({
           description: "Requested S3 bucket does not exist.",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false) // infrastructure/config issue
         .build();
 
     case "NoSuchKey":
+    case "NotFound":
       return errorBuilder
         .setHttpCode(404)
         .setCode(S3_ERROR_CODES.NO_SUCH_KEY)
         .addDetails({
           description: "Requested S3 object does not exist.",
-          reason: errorMessage,
+          context,
         })
         .setOperational(true)
         .build();
@@ -42,10 +40,11 @@ export function convertS3Error(error: any): AppError {
     case "AccessDenied":
       return errorBuilder
         .setHttpCode(403)
-        .setCode(S3_ERROR_CODES.ACCESS_DENIED)
+        .setCode(APP_ERROR_CODE.ACCESS_DENIED)
         .addDetails({
           description: "Access to the requested S3 resource is denied.",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false)
         .build();
@@ -53,10 +52,10 @@ export function convertS3Error(error: any): AppError {
     case "SlowDown":
       return errorBuilder
         .setHttpCode(429)
-        .setCode(S3_ERROR_CODES.SLOW_DOWN)
+        .setCode(APP_ERROR_CODE.TOO_MANY_REQUESTS)
         .addDetails({
           description: "Too many S3 requests, please slow down.",
-          reason: errorMessage,
+          context,
         })
         .setOperational(true)
         .setRetriable(true) // retry after backoff
@@ -65,10 +64,11 @@ export function convertS3Error(error: any): AppError {
     case "InternalError":
       return errorBuilder
         .setHttpCode(500)
-        .setCode(S3_ERROR_CODES.INTERNAL_ERROR)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "Internal server error in S3.",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false)
         .build();
@@ -76,22 +76,23 @@ export function convertS3Error(error: any): AppError {
     case "ServiceUnavailable":
       return errorBuilder
         .setHttpCode(503)
-        .setCode(S3_ERROR_CODES.SERVICE_UNAVAILABLE)
+        .setCode(APP_ERROR_CODE.SERVICE_UNAVAILABLE)
         .addDetails({
           description: "S3 service is temporarily unavailable.",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .build();
 
     default:
       return errorBuilder
-        .setHttpCode(error?.$metadata?.httpStatusCode || 500)
-        .setCode(S3_ERROR_CODES.UNKNOWN_S3_ERROR)
+        .setHttpCode(httpStatusCode)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "An unknown S3 error occurred.",
-          context: errorName,
-          reason: errorMessage,
+          context,
+          reason: { errorName, errorMessage }
         })
         .setOperational(false)
         .build();

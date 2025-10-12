@@ -14,7 +14,7 @@
     "test:integration:queue-service": "./scripts/test/integration/queue-service.sh",
 
     "test:unit:storage-service": "nx test @notes-app/storage-service --configuration=unit",
-    "test:integration:storage-service": "nx test @notes-app/storage-service --configuration=integration",
+    "test:integration:storage-service": "./scripts/test/integration/storage-service.sh",
 
     "test:unit:auth-repository": "nx test @note-app/auth-repository --configuration=unit",
     "test:integration:auth-repository": "nx test @note-app/auth-repository --configuration=integration",

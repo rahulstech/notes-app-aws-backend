@@ -16,6 +16,20 @@
         "format": ["cjs"],
         "generatePackageJson": false
       }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "passWithNoTests": true
+      },
+      "configurations": {
+        "unit": {
+          "jestConfig": "data/storage/jest.unit.config.ts"
+        },
+        "integration": {
+          "jestConfig": "data/storage/jest.integration.config.ts"
+        }
+      }
     }
   }
 }

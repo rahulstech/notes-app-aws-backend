@@ -14,15 +14,12 @@ import { convertS3Error, S3_ERROR_CODES } from '../errors';
 import { executeChunk, LOGGER } from '@notes-app/common';
 
 const LOG_TAG = 'NoteS3ObjectService';
-
 const PRESIGNED_URL_EXPIRES_IN = 900; // 15 minutes
 
 export interface NoteS3ObjectServiceOptions {
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
   bucket: string;
   mediaBaseUrl: string;
+  client: S3Client;
 }
 
 export class NoteS3ObjectService implements NoteObjectService {
@@ -33,13 +30,7 @@ export class NoteS3ObjectService implements NoteObjectService {
   constructor(options: NoteS3ObjectServiceOptions) {
     this.mediaBaseUrl = options.mediaBaseUrl;
     this.bucket = options.bucket;
-    this.client = new S3Client({
-      region: options.region,
-      credentials: {
-        accessKeyId: options.accessKeyId,
-        secretAccessKey: options.secretAccessKey,
-      },
-    });
+    this.client = options.client;
   }
 
   public async getObjectUploadUrl(input: ObjectUploadUrlInput): Promise<ObjectUploadUrlOutput> {
@@ -61,7 +52,7 @@ export class NoteS3ObjectService implements NoteObjectService {
       }
     }
     catch(error) {
-      throw convertS3Error(error)
+      throw convertS3Error(error,{ tag: LOG_TAG, method: "getObjectUploadUrl", input });
     }
   }
 
