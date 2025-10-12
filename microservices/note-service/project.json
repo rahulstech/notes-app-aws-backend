@@ -29,6 +29,9 @@
           "main": "microservices/note-service/src/main.ts"
         },
         "production": {
+          "bundle": true,
+          "minify": true,
+          "external": ["aws-sdk"],
           "main": "microservices/note-service/src/index.ts",
           "esbuildOptions": {
             "sourcemap": false,
@@ -59,7 +62,7 @@
       ],
       "executor": "@nx/js:copy-workspace-modules",
       "options": {
-        "buildTarget": "build"
+        "buildTarget": "build:production"
       }
     },
     "prune": {

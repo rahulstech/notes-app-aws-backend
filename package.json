@@ -19,8 +19,10 @@
     "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js",
     
     "build:auth-service": "nx run auth-service:build:production",
-    "build:note-service": "run note-service:build:production",
-    "build:queue-service": "nx run queue-service:build:production"
+    "build:note-service": "nx run note-service:build:production",
+    "build:queue-service": "nx run queue-service:build:production",
+
+    "publish": "./scripts/prod/publish.sh"
   },
   "repository": {
     "type": "git",

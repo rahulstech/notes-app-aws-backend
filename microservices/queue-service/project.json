@@ -13,7 +13,6 @@
         "platform": "node",
         "outputPath": "dist/microservices/queue-service",
         "format": ["cjs"],
-        "bundle": false,
          "tsConfig": "microservices/queue-service/tsconfig.app.json",
         "assets": ["microservices/queue-service/src/assets"],
         "generatePackageJson": true,
@@ -26,9 +25,13 @@
       },
       "configurations": {
         "development": {
+          "bundle": false,
           "main": "microservices/queue-service/src/main.ts"
         },
         "production": {
+          "bundle": true,
+          "minify": true,
+          "external": ["aws-sdk"],
           "main": "microservices/queue-service/src/index.ts",
           "esbuildOptions": {
             "sourcemap": false,

@@ -10,4 +10,4 @@ dist
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 /.vscode
-schema/dynamodb_data
+/publish
