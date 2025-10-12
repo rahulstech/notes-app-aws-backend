@@ -1,7 +1,8 @@
-import { ENVIRONMENT } from "@notes-app/common";
+import { configenv } from "@notes-app/common";
 import { NoteQueueService } from "../NoteQueueService";
 import { NoteQueueServiceFactory } from "../NoteQueueServiceFactory";
 import { NoteSQSQueueService } from "./NoteSQSQueueService";
+import { SQSClient } from "@aws-sdk/client-sqs";
 
 const {
     NODE_ENV,
@@ -9,15 +10,38 @@ const {
     AWS_SECRET_ACCESS_KEY,
     SQS_REGION,
     SQS_URL,
-  } = ENVIRONMENT;
+    SQS_LOCAL_ENDPOINT_URL,
+  } = configenv();
 
 export class NoteQueueServiceFactoryImpl implements NoteQueueServiceFactory {
     public createNoteQueueService(): NoteQueueService {
-        return new NoteSQSQueueService({
-            accessKeyId: AWS_ACCESS_KEY_ID,
-            secretAccessKey: AWS_SECRET_ACCESS_KEY,
-            region: SQS_REGION,
-            queueUrl: SQS_URL,
-          });
+        if (NODE_ENV === "prod") {
+          return this.createProdNoteQueueService();
+        }
+        return this.createDevNoteQueueService();
+    }
+
+    public createDevNoteQueueService(): NoteQueueService {
+      const client = new SQSClient({
+        endpoint: SQS_LOCAL_ENDPOINT_URL,
+      })
+      return new NoteSQSQueueService({
+        queueUrl: SQS_URL,
+        client,
+      });
+    }
+
+    public createProdNoteQueueService(): NoteQueueService {
+      const client = new SQSClient({
+        region: SQS_REGION,
+        credentials: {
+          accessKeyId: AWS_ACCESS_KEY_ID,
+          secretAccessKey: AWS_SECRET_ACCESS_KEY,
+        }
+      })
+      return new NoteSQSQueueService({
+        queueUrl: SQS_URL,
+        client,
+      });
     }
 }

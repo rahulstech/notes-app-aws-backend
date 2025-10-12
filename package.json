@@ -11,7 +11,7 @@
     "test:integration:database-service": "./scripts/test/integration/database-service.sh",
 
     "test:unit:queue-service": "nx test @notes-app/queue-service --configuration=unit",
-    "test:integration:queue-service": "nx test @notes-app/queue-service --configuration=integration",
+    "test:integration:queue-service": "./scripts/test/integration/queue-service.sh",
 
     "test:unit:storage-service": "nx test @notes-app/storage-service --configuration=unit",
     "test:integration:storage-service": "nx test @notes-app/storage-service --configuration=integration",

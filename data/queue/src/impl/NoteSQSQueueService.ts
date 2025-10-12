@@ -32,11 +32,9 @@ function parseMessageBody(source_type: QueueMessageSourceType, event_type: Queue
 }
 
 export interface NoteSQSQueueServiceOptions {
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
   queueUrl: string;
   pollSeconds?: number;
+  client: SQSClient;
 }
 
 export class NoteSQSQueueService implements NoteQueueService {
@@ -45,17 +43,9 @@ export class NoteSQSQueueService implements NoteQueueService {
   private queueUrl: string;
 
   constructor(options: NoteSQSQueueServiceOptions) {
-    const { region, accessKeyId, secretAccessKey, pollSeconds, queueUrl } =
-      options;
-    this.client = new SQSClient({
-      region,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-    });
-    this.pollSeconds = pollSeconds || DEFAULT_DEQUEUE_POLL_SECONDS;
-    this.queueUrl = queueUrl;
+    this.client = options.client;
+    this.pollSeconds = options.pollSeconds || DEFAULT_DEQUEUE_POLL_SECONDS;
+    this.queueUrl = options.queueUrl;
   }
 
   /**
@@ -179,8 +169,6 @@ export class NoteSQSQueueService implements NoteQueueService {
       receipt_handle: ReceiptHandle,
     }
   }
-
-  
 
   /**
    * Removes multiple messages from the queue after they have been processed.
