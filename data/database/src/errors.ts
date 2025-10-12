@@ -1,9 +1,8 @@
-import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from "@notes-app/common";
 
 export const DYNAMODB_ERROR_CODES = {
 
   // private error: can not share error details via api response
-  UNKNOWN_DYNAMODB_ERROR: 1000,
   CONDITIONAL_CHECK_FAILED: 1001,
   RESOURCE_NOT_FOUND: 1002,
   PROVISIONED_THROUGHPUT_EXCEEDED: 1003,
@@ -19,7 +18,7 @@ export const DYNAMODB_ERROR_CODES = {
   TOO_MANY_MEDIA_ITEMS: 1012,
 };
 
-export function convertDynamoDbError(error: any): AppError {
+export function convertDynamoDbError(error: any, context?: any): AppError {
   const errorBuilder = newAppErrorBuilder();
 
   const errorName = error.name || "UnknownError";
@@ -32,7 +31,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED)
         .addDetails({
           description: "Conditional check failed due to a conflict",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false)
         .build();
@@ -40,10 +40,11 @@ export function convertDynamoDbError(error: any): AppError {
     case "ResourceNotFoundException": // table, index etc. not found
       return errorBuilder
         .setHttpCode(404)
-        .setCode(DYNAMODB_ERROR_CODES.RESOURCE_NOT_FOUND)
+        .setCode(APP_ERROR_CODE.NOT_FOUND)
         .addDetails({
           description: "Requested DynamoDB resource not found",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false) 
         .build();
@@ -54,7 +55,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.PROVISIONED_THROUGHPUT_EXCEEDED)
         .addDetails({
           description: "DynamoDB provisioned throughput exceeded",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .setRetriable(true) // retry with backoff
@@ -66,7 +68,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.ITEM_COLLECTION_SIZE_LIMIT)
         .addDetails({
           description: "Item collection size limit exceeded",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false)
         .build();
@@ -77,7 +80,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.TRANSACTION_CONFLICT)
         .addDetails({
           description: "Transaction conflict occurred in DynamoDB",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .setRetriable(true)
@@ -86,10 +90,11 @@ export function convertDynamoDbError(error: any): AppError {
     case "RequestLimitExceeded":
       return errorBuilder
         .setHttpCode(429)
-        .setCode(DYNAMODB_ERROR_CODES.REQUEST_LIMIT_EXCEEDED)
+        .setCode(APP_ERROR_CODE.TOO_MANY_REQUESTS)
         .addDetails({
           description: "DynamoDB request limit exceeded",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .setRetriable(true)
@@ -101,7 +106,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.VALIDATION_ERROR)
         .addDetails({
           description: "Validation error in DynamoDB request",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .build();
@@ -112,7 +118,8 @@ export function convertDynamoDbError(error: any): AppError {
         .setCode(DYNAMODB_ERROR_CODES.RESOURCE_IN_USE)
         .addDetails({
           description: "DynamoDB resource is currently in use",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true)
         .setRetriable(true)
@@ -121,10 +128,11 @@ export function convertDynamoDbError(error: any): AppError {
     case "InternalServerError":
       return errorBuilder
         .setHttpCode(500)
-        .setCode(DYNAMODB_ERROR_CODES.INTERNAL_SERVER_ERROR)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "Internal server error in DynamoDB",
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false)
         .build();
@@ -132,35 +140,35 @@ export function convertDynamoDbError(error: any): AppError {
     default:
       return errorBuilder
         .setHttpCode(500)
-        .setCode(DYNAMODB_ERROR_CODES.UNKNOWN_DYNAMODB_ERROR)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "Unknown DynamoDB error occurred",
-          context: errorName,
-          reason: error,
+          context,
+          reason: toErrorReason(error),
         })
         .setOperational(false)
         .build();
   }
 }
 
-export function createNoteNotFoundError(method: string, context: {PK: string; SK: string}): AppError {
+export function createNoteNotFoundError(context?: any): AppError {
   return newAppErrorBuilder()
             .setHttpCode(404)
             .setCode(APP_ERROR_CODE.NOT_FOUND)
             .addDetails({
               description: "note not found",
-              context: { method: `NoteDynamoDbDataService#${method}`, ...context },
+              context,
             })
             .build()
 } 
 
-export function createTooManyMediaItemError(method: string, context?: any): AppError {
+export function createTooManyMediaItemError(context?: any): AppError {
   return newAppErrorBuilder()
             .setHttpCode(400)
             .setCode(DYNAMODB_ERROR_CODES.TOO_MANY_MEDIA_ITEMS)
             .addDetails({
               description: "total media count exceeds accepted media count",
-              context: { method: `NoteDynamoDbDataService#${method}`, ...context }
+              context,
             })
             .build()
 } 

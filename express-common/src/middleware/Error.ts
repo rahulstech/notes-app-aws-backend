@@ -57,26 +57,25 @@ export function expressNotImplementedHandler(): RequestHandler {
 }
 
 export function expressErrorHandler(): ErrorRequestHandler {
-  return (error: Error, req: Request, res: Response,_) => {
+  return (error: Error, req: Request, res: Response, next: NextFunction) => {
 
     const appError = convertToAppError(error);
 
-    LOGGER.logError("api error", { error: appError });
+    LOGGER.logFatal("api error", { error: appError });
 
     const errorResponse: ErrorResponse = {
       code: appError.code,
       retriable: appError.retriable,
     };
-    if (appError.details) {
-      if (appError.details.length === 1) {
-        errorResponse.details = appError.details[0].description;
-      } else {
-        errorResponse.details = appError.details.map((entry) => entry.description);
-      }
+    if (appError.details && appError.details.length > 0) {
+      errorResponse.details = appError.details.map((entry) => entry.description);
     }
     res.status(appError.httpCode).json(errorResponse);
 
-    // TODO: check operational flag of AppError and shutdown if required
+    // exit if operational=false
+    if (!appError.operational) {
+      process.exit(1);
+    }
   };
 }
 
@@ -89,7 +88,6 @@ function convertToAppError(error: Error): AppError {
         .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "internal server error",
-          context: error.name,
           reason: error,
         })
         .setOperational(false)

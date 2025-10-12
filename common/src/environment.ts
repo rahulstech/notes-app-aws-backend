@@ -1,12 +1,10 @@
 import Joi = require("joi");
 import { validate } from "./validator";
 
-const ENV_RULES = Joi.object({
+
+const COMMON_RULES = {
     // General
-    NODE_ENV: Joi.string().valid('dev','prod','test').default('dev'),
     LOG_LEVEL: Joi.string().valid('debug','info','warn','error','fatal').default('info'),
-    NOTE_SERVICE_SERVER_PORT: Joi.number().default(3000),
-    AUTH_SERVICE_SERVER_PORT: Joi.number().default(4000),
 
     // AWS
     AWS_ACCESS_KEY_ID: Joi.string().required(),
@@ -20,10 +18,9 @@ const ENV_RULES = Joi.object({
     // SQS
     SQS_REGION: Joi.string().required(),
     SQS_URL: Joi.string().uri().required(),
+    SQS_MESSAGE_VISIBILITY_TIMEOUT_SECONDS: Joi.number().integer().default(30),
 
     // DynamoDB
-    DYNAMODB_REGION: Joi.string(),
-    DYNAMODB_LOCAL_ENDPOINT_URL: Joi.string().uri(),
     DYNAMODB_NOTES_TABLE: Joi.string().required(),
 
     // Cognito
@@ -40,14 +37,48 @@ const ENV_RULES = Joi.object({
     MAX_BATCH_GET_MEDIA_UPLOAD_URL_COUNT: Joi.number().default(25),
     MAX_BATCH_REMOVE_MEDIAS_COUNT: Joi.number().default(25),
     MAX_ALLOWED_MEDIAS_SIZE_BYTES: Joi.number().default(10485760), // 10mb
-});
+};
 
-let _ENVIRONMENT = undefined;
+const DEV_ENV_RULES = {
+    ...COMMON_RULES,
 
-export const ENVIRONMENT = (() => {
-    if (!_ENVIRONMENT) {
-        const values = validate(ENV_RULES, process.env);
-        _ENVIRONMENT = Object.freeze(values);
+    // General
+    NOTE_SERVICE_SERVER_PORT: Joi.number().default(3000),
+    AUTH_SERVICE_SERVER_PORT: Joi.number().default(4000),
+
+    // DynamoDB
+    DYNAMODB_LOCAL_ENDPOINT_URL: Joi.string().uri(),
+};
+
+const PROD_ENV_RULES = {
+    ...COMMON_RULES,
+
+    // DynamoDB
+    DYNAMODB_REGION: Joi.string(),
+};
+
+let processed: boolean = false;
+
+export function configenv(): Record<string,any> {
+    if (!processed) {
+        let rules: Record<string,Joi.Schema> | undefined;
+        switch(process.env.NODE_ENV) {
+            case "prod": rules = PROD_ENV_RULES;
+            break;
+            case "dev": rules = DEV_ENV_RULES;
+            break;
+            default: rules = undefined;
+        }
+        if (rules !== undefined) {
+            const values = validate(rules, process.env);
+            process.env = {
+                ...process.env,
+                ...values,
+            };
+        }
+        // processed = true;
     }
-    return _ENVIRONMENT;
-})();
+    return process.env as Record<string,any>;
+}
+
+

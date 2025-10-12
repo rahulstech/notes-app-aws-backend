@@ -1,16 +1,15 @@
-import { ENVIRONMENT } from "@notes-app/common";
+import { configenv } from "@notes-app/common";
 import { AuthService } from "../AuthService";
 import { AuthServiceFactory } from "../AuthServiceFactory";
 import { CognitoAuthServiceImpl } from "./CognitoAuthServiceImpl";
 
 const {
-    NODE_ENV,
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
     COGNITO_REGION,
     COGNITO_CLIENT_ID,
     COGNITO_USER_POOL_ID,
-} = ENVIRONMENT;
+} = configenv();
 
 export class AuthServiceFactoryImpl implements AuthServiceFactory {
 

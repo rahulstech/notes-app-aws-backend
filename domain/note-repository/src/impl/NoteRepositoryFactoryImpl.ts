@@ -1,11 +1,11 @@
 import { NoteRepository, NoteRepositoryImpl } from "@note-app/note-repository";
-import { ENVIRONMENT, LOGGER } from "@notes-app/common";
+import { configenv, LOGGER } from "@notes-app/common";
 import { NoteDataServiceFactory } from "@notes-app/database-service";
 import { NoteQueueServiceFactory } from "@notes-app/queue-service";
 import { NoteObjectServiceFactory } from "@notes-app/storage-service";
 import { NoteRepositoryFactory } from "../NoteRepositoryFactory";
 
-const { NODE_ENV } = ENVIRONMENT;
+const { NODE_ENV } = configenv();
 
 export class NoteRepositoryFactoryImpl implements NoteRepositoryFactory {
 

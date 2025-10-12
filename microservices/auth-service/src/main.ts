@@ -1,5 +1,5 @@
 
-import { ENVIRONMENT, LOGGER } from '@notes-app/common';
+import { configenv, LOGGER } from '@notes-app/common';
 import { NoteQueueServiceFactoryImpl } from '@notes-app/queue-service';
 import { AuthAppConfig } from './types';
 import { createAuthExpressApp } from './app';
@@ -18,7 +18,7 @@ const config: AuthAppConfig = {
 };
 const app = createAuthExpressApp(config);
 
-const PORT = ENVIRONMENT.AUTH_SERVICE_SERVER_PORT;
+const PORT = configenv().AUTH_SERVICE_SERVER_PORT;
 
 app.listen(PORT, () => {
     LOGGER.logInfo(`server running http://localhost:${PORT}`)

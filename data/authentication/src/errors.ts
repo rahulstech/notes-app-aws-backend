@@ -1,7 +1,6 @@
-import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from "@notes-app/common";
 
 export const AUTH_SERVICE_ERROR_CODE = {
-    UNKNOWN: 4000,
     NOT_AUTHORIZED: 4001,
     USER_NOT_FOUND: 4002,
     USERNAME_EXISTS: 4003,
@@ -14,20 +13,21 @@ export const AUTH_SERVICE_ERROR_CODE = {
     INVALID_CREDENTIALS: 4011,
 } as const;
 
-export function convertCognitoError(error: NonNullable<any>): AppError {
+export function convertCognitoError(error: any, context?: any): AppError {
     const builder = newAppErrorBuilder();
 
-    const errorType = error.name;
+    const errorName = error.name;
+    const errorMessage = error.message ?? ""
 
-    switch (errorType) {
+    switch (errorName) {
         case "NotAuthorizedException":
             builder
                 .setCode(AUTH_SERVICE_ERROR_CODE.NOT_AUTHORIZED)
                 .setHttpCode(401)
                 .addDetails({
                     description: "You are not authorized to perform this action.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -37,8 +37,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(404)
                 .addDetails({
                     description: "The specified user does not exist.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -48,8 +48,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(409)
                 .addDetails({
                     description: "The username already exists.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -59,8 +59,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(400)
                 .addDetails({
                     description: "The provided password is invalid.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -70,8 +70,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(400)
                 .addDetails({
                     description: "The provided code does not match.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -81,8 +81,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(400)
                 .addDetails({
                     description: "The provided code has expired.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -92,8 +92,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(429)
                 .addDetails({
                     description: "Too many requests have been made. Please try again later.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -103,8 +103,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(429)
                 .addDetails({
                     description: "limit exceeded.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
 
@@ -114,8 +114,8 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(400)
                 .addDetails({
                     description: "One or more parameters are invalid.",
-                    context: errorType,
-                    reason: error.message,
+                    context,
+                    reason: {errorName,errorMessage}
                 });
             break;
         
@@ -125,18 +125,18 @@ export function convertCognitoError(error: NonNullable<any>): AppError {
                 .setHttpCode(400)
                 .addDetails({
                     description: "username already exists",
-                    context: errorType,
-                    reason: error
+                    context,
+                    reason: {errorName,errorMessage}
                 })
             break;
         default: {
             builder
-                .setCode(AUTH_SERVICE_ERROR_CODE.UNKNOWN)
+                .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
                 .setHttpCode(500)
                 .addDetails({
                     description: "An unknown error occurred with Cognito.",
-                    context: "Unknown",
-                    reason: error,
+                    context,
+                    reason: toErrorReason(error),
                 });
             break;
         }

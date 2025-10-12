@@ -1,13 +1,13 @@
+import { configenv, LOGGER } from "@notes-app/common";
 import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
 import { createNoteExpressApp } from "./app";
 import { NoteExpressAppConfiguration } from "./types";
-import { ENVIRONMENT, LOGGER } from "@notes-app/common";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
 import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
-const { NOTE_SERVICE_SERVER_PORT } = ENVIRONMENT;
+const { NOTE_SERVICE_SERVER_PORT } = configenv();
 
 const config: NoteExpressAppConfiguration = {
   noteRepositoryFactory: new NoteRepositoryFactoryImpl(

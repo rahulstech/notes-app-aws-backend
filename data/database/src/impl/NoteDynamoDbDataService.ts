@@ -5,7 +5,6 @@ import {
   UpdateItemCommand,
   BatchGetItemCommand,
   TransactWriteItemsCommand,
-  DynamoDBClientConfig,
   BatchWriteItemCommand,
   WriteRequest,
   PutItemCommand,
@@ -26,7 +25,7 @@ import {
   UpdateNoteDataOutputItem,
 } from '../types';
 import { randomUUID } from 'crypto';
-import { APP_ERROR_CODE, createRecord, decodeBase64, encodeBase64, LOGGER, newAppErrorBuilder, pickExcept } from '@notes-app/common';
+import { createRecord, decodeBase64, encodeBase64, LOGGER, pickExcept } from '@notes-app/common';
 import { convertDynamoDbError, createNoteNotFoundError, createTooManyMediaItemError, DYNAMODB_ERROR_CODES } from '../errors';
 import { fromNoteDBItem } from '../helpers';
 
@@ -87,7 +86,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       return [...newNotes, ...existingNotes];
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"createMultipleNotes"});
     }
   }
 
@@ -130,7 +129,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }));
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNoteIdsForNoteGlobalIds"});
     }
 
     return {};
@@ -152,7 +151,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNotesByNoteIds"});
     }
     return [];
   }
@@ -189,7 +188,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
     catch(error) {
       return {
         ...input,
-        error: convertDynamoDbError(error)
+        error: convertDynamoDbError(error,{tag:LOG_TAG,method:"createSingleNote",PK,input})
       }
     }
   }
@@ -225,11 +224,11 @@ export class NoteDynamoDbDataService implements NoteDataService {
           return fromNoteDBItem(Item) as ShortNoteItem;
         }) ?? [],
         limit: Limit,
-        pageMark: LastEvaluatedKey && encodeBase64(JSON.stringify(LastEvaluatedKey)),
+        pageMark: (LastEvaluatedKey && encodeBase64(JSON.stringify(LastEvaluatedKey))) ?? pageMark,
       };
     }
     catch(error) {
-      throw convertDynamoDbError(error)
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNotes"})
     }
   }
 
@@ -254,7 +253,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNoteIds"});
     }
     return {
       SKs: [],
@@ -282,10 +281,10 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error){
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNoteById"});
     }
 
-    throw createNoteNotFoundError("getNoteById", {PK,SK});
+    throw createNoteNotFoundError({ tag: LOG_TAG, method: "getNoteById"});
   }
 
   /**
@@ -332,9 +331,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
       };
     }
     catch(error) {
-      const dberror = convertDynamoDbError(error);
+      const dberror = convertDynamoDbError(error,{tag:LOG_TAG,method:"updateSingleNote"});
       if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) { 
-        throw createNoteNotFoundError("updateSingleNote",{PK,SK});
+        throw createNoteNotFoundError({ tag: LOG_TAG, method: "updateSingleNote" });
       }
       throw dberror;
     }
@@ -363,7 +362,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"deleteMultipleNotes"});
     }
     return {};
   }
@@ -415,7 +414,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
     if (nonExistingMedias.length > 0) {
       // adding new medias must not exceed the per note allowed max media count
       if (currentMediaCount + nonExistingMedias.length > this.maxMediasPerItem) {
-        throw createTooManyMediaItemError("addMedias",{PK,SK});
+        throw createTooManyMediaItemError({ tag: LOG_TAG, method: "addMedias", PK, SK });
       }
 
       // update note
@@ -481,7 +480,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       return result;
     }
     catch(error){
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"udateNoteMedias"});
     }
   }
 
@@ -511,9 +510,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      throw convertDynamoDbError(error);
+      throw convertDynamoDbError(error,{tag:LOG_TAG,method:"getNoteMedias"});
     }
-    throw createNoteNotFoundError("getNoteMedias", {PK,SK});
+    throw createNoteNotFoundError({ tag: LOG_TAG, method: "getNoteMedias" });
   }
 
   /**
@@ -554,9 +553,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }));
     }
     catch(error) {
-      const dberror = convertDynamoDbError(error);
+      const dberror = convertDynamoDbError(error,{tag:LOG_TAG,method:"updateMediaStatus"});
       if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) {
-        throw createNoteNotFoundError("updateMediaStatus",{PK,SK});
+        throw createNoteNotFoundError({ tag: LOG_TAG, method: "updateMediaStatus" });
       }
       throw dberror;
     }
@@ -602,9 +601,9 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }
     }
     catch(error) {
-      const dberror = convertDynamoDbError(error);
+      const dberror = convertDynamoDbError(error,{ tag: LOG_TAG, method: "removeNoteMedias" });
       if (dberror.code === DYNAMODB_ERROR_CODES.CONDITIONAL_CHECK_FAILED) {
-        throw createNoteNotFoundError("removeNoteMedias",{PK,SK});
+        throw createNoteNotFoundError({ tag: LOG_TAG, method: "removeNoteMedias" });
       }
       throw dberror;
     }

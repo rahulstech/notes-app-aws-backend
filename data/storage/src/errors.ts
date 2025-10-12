@@ -1,4 +1,4 @@
-import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "@notes-app/common";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from "@notes-app/common";
 
 export const S3_ERROR_CODES = {
   NO_SUCH_BUCKET: 2001,
@@ -6,7 +6,7 @@ export const S3_ERROR_CODES = {
   SLOW_DOWN: 2004,
 };
 
-export function convertS3Error(error: any, context?: any, httpStatusCode: number = 500): AppError {
+export function convertS3Error(error: any, context?: any): AppError {
   const errorBuilder = newAppErrorBuilder();
 
   const errorName = error?.name || "UnknownS3Error";
@@ -87,12 +87,12 @@ export function convertS3Error(error: any, context?: any, httpStatusCode: number
 
     default:
       return errorBuilder
-        .setHttpCode(httpStatusCode)
+        .setHttpCode(500)
         .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: "An unknown S3 error occurred.",
           context,
-          reason: { errorName, errorMessage }
+          reason: toErrorReason(error),
         })
         .setOperational(false)
         .build();

@@ -8,6 +8,8 @@ import { expressErrorHandler, expressNotFoundHandler, extractUserClaim } from '@
 
 export function createNoteExpressApp(config: NoteExpressAppConfiguration): Express {
 
+    const noteRepository = config.noteRepositoryFactory.createNoteRepository();
+    const userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
     const app: Express = express();
 
     /////////////////////////////////////////////////
@@ -21,8 +23,8 @@ export function createNoteExpressApp(config: NoteExpressAppConfiguration): Expre
     app.use(express.json());
 
     app.use((req: NoteApiExpressRequest,_, next: NextFunction) => {
-        req.noteRepository = config.noteRepositoryFactory.createNoteRepository();
-        req.userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor()
+        req.noteRepository = noteRepository;
+        req.userClaimExtractor = userClaimExtractor;
         next();
     });
 

@@ -11,9 +11,11 @@ export S3_ENDPOINT=http://localhost:$S3_TEST_EP_PORT
 export S3_BUCKET=test-bucket
 
 # Stop previous container if running
+echo "Stoping existing container"
 docker stop $S3_TEST_CONTAINER > /dev/null 2>&1 || true
 
 # Start LocalStack SQS
+echo "Creating and starting container"
 docker run --rm -d \
   -p $S3_TEST_EP_PORT:4566 \
   -e SERVICES="s3" \
@@ -46,4 +48,5 @@ aws s3 --endpoint-url "$S3_ENDPOINT" mb s3://$S3_BUCKET > /dev/null 2>&1;
 npx nx test @notes-app/storage-service --configuration=integration
 
 # Stop container
+echo "Stoping container"
 docker stop $S3_TEST_CONTAINER > /dev/null 2>&1 || true

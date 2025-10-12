@@ -1,9 +1,9 @@
-import { ENVIRONMENT } from "@notes-app/common";
+import { configenv } from "@notes-app/common";
 import { ApiGatewayUserClaimExtractor, DefaultUserClaimExtractor, UserClaim, UserClaimExtractorProvider } from "@notes-app/express-common";
 import { Request } from "express";
 import jwt from 'jsonwebtoken';
 
-const { NODE_ENV } = ENVIRONMENT;
+const { NODE_ENV } = configenv();
 
 const GUEST_USER_CLAIM: UserClaim = {
     userId: "GUEST",

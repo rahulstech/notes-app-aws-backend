@@ -14,11 +14,20 @@ export const APP_ERROR_CODE = {
     SERVICE_UNAVAILABLE: 6010,
     LIMIT_EXCEEDED: 6011,
     INCORRECT_INPUT: 6012,
+    ACCESS_DENIED: 6013,
 };
+
+export function toErrorReason(error: any): any {
+    if (error instanceof Error) {
+        delete error.stack;
+        return error;
+    }
+    return error;
+}
 
 export interface AppErrorItem {
     description: string;
-    context?: string;
+    context?: any;
     reason?: any;
 }
 
@@ -44,7 +53,7 @@ export class AppError extends Error {
         }
     }
 
-    public toJSON(): object {
+    public toJSON(): Record<string,any> | object {
         return {
             name: this.name,
             httpCode: this.httpCode,

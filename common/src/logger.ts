@@ -1,7 +1,6 @@
 import pino from "pino";
-import { ENVIRONMENT } from "./environment";
 
-const { NODE_ENV, LOG_LEVEL } = ENVIRONMENT;
+const { NODE_ENV, LOG_LEVEL } = process.env;
 
 export type LogExtras = Record<string,any>;
 

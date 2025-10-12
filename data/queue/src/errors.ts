@@ -1,7 +1,6 @@
-import { AppError, newAppErrorBuilder } from '@notes-app/common';
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from '@notes-app/common';
 
 export const SQS_ERROR_CODES = {
-  UNKNOWN_SQS_ERROR: 3000,
   QUEUE_DOES_NOT_EXIST: 3001,
   OVER_LIMIT: 3002,
   PURGE_IN_PROGRESS: 3003,
@@ -11,7 +10,7 @@ export const SQS_ERROR_CODES = {
   INTERNAL_ERROR: 3007,
 };
 
-export function convertSQSError(error: any): AppError {
+export function convertSQSError(error: any, context?: any): AppError {
 
   const errorBuilder = newAppErrorBuilder();
   const errorName = error?.name || 'UnknownSQSError';
@@ -24,7 +23,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.QUEUE_DOES_NOT_EXIST)
         .addDetails({
           description: 'The requested SQS queue does not exist.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(false) // infra/config issue
         .build();
@@ -35,7 +35,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.OVER_LIMIT)
         .addDetails({
           description: 'SQS request rate exceeded the allowed limit.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true) // retryable
         .build();
@@ -46,7 +47,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.PURGE_IN_PROGRESS)
         .addDetails({
           description: 'The queue is being purged. Try again later.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true) // retry after purge
         .build();
@@ -57,7 +59,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.INVALID_RECEIPT_HANDLE)
         .addDetails({
           description: 'The provided receipt handle is invalid or expired.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true) // client can retry with valid handle
         .build();
@@ -68,7 +71,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.MESSAGE_NOT_INFLIGHT)
         .addDetails({
           description: 'The requested SQS message is not in-flight.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true) // client error, fixable
         .build();
@@ -79,7 +83,8 @@ export function convertSQSError(error: any): AppError {
         .setCode(SQS_ERROR_CODES.INVALID_MESSAGE_CONTENTS)
         .addDetails({
           description: 'The SQS message contains invalid characters.',
-          reason: errorMessage,
+          context,
+          reason: {errorMessage},
         })
         .setOperational(true) // client error, fixable
         .build();
@@ -87,22 +92,23 @@ export function convertSQSError(error: any): AppError {
     case 'InternalError':
       return errorBuilder
         .setHttpCode(500)
-        .setCode(SQS_ERROR_CODES.INTERNAL_ERROR)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: 'Internal server error in SQS.',
-          reason: errorMessage,
+          context,
+          reason: {errorName,errorMessage},
         })
         .setOperational(false)
         .build();
 
     default:
       return errorBuilder
-        .setHttpCode(error?.$metadata?.httpStatusCode || 500)
-        .setCode(SQS_ERROR_CODES.UNKNOWN_SQS_ERROR)
+        .setHttpCode(500)
+        .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
         .addDetails({
           description: 'An unknown SQS error occurred.',
-          context: errorName,
-          reason: errorMessage,
+          context,
+          reason: toErrorReason(error),
         })
         .setOperational(false)
         .build();

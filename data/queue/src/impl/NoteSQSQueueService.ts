@@ -17,7 +17,8 @@ import { getEventType, getSourceType } from '../helpers';
 import { LOGGER } from '@notes-app/common';
 
 const LOG_TAG = "NoteSQSQueueService";
-const DEFAULT_DEQUEUE_POLL_SECONDS = 20;
+const DEFAULT_DEQUEUE_POLL_SECONDS = 20; // must be between 0 and 20 seconds
+const DEFAULT_MESSAGE_VISIBILITY_TIMEOUT_SECONDS = 30; // must be between 0 seconds and 12 hours
 
 function parseMessageBody(source_type: QueueMessageSourceType, event_type: QueueMessageEventType,rawBody: any): any {
   if (source_type === QueueMessageSourceType.S3 && event_type === QueueMessageEventType.CREATE_OBJECT) {
@@ -33,18 +34,18 @@ function parseMessageBody(source_type: QueueMessageSourceType, event_type: Queue
 
 export interface NoteSQSQueueServiceOptions {
   queueUrl: string;
-  pollSeconds?: number;
+  messageVisibilityTimeoutSeconds?: number;
   client: SQSClient;
 }
 
 export class NoteSQSQueueService implements NoteQueueService {
   private client: SQSClient;
-  private pollSeconds: number;
+  private messageVisibilityTimeoutSeconds: number;
   private queueUrl: string;
 
   constructor(options: NoteSQSQueueServiceOptions) {
     this.client = options.client;
-    this.pollSeconds = options.pollSeconds || DEFAULT_DEQUEUE_POLL_SECONDS;
+    this.messageVisibilityTimeoutSeconds = options.messageVisibilityTimeoutSeconds ?? DEFAULT_MESSAGE_VISIBILITY_TIMEOUT_SECONDS;
     this.queueUrl = options.queueUrl;
   }
 
@@ -62,7 +63,7 @@ export class NoteSQSQueueService implements NoteQueueService {
         })
       );
     } catch (error) {
-      throw convertSQSError(error);
+      throw convertSQSError(error,{tag:LOG_TAG,method:"enqueueMessage"});
     }
   }
 
@@ -84,7 +85,7 @@ export class NoteSQSQueueService implements NoteQueueService {
         })
       );
     } catch (error) {
-      throw convertSQSError(error);
+      throw convertSQSError(error,{tag:LOG_TAG,method:"enqueueMultipleMessages"});
     }
   }
 
@@ -97,7 +98,9 @@ export class NoteSQSQueueService implements NoteQueueService {
     try {
       const cmd = new ReceiveMessageCommand({
         QueueUrl: this.queueUrl,
-        WaitTimeSeconds: this.pollSeconds,
+        // message will not be available to other consumer if received by a consumer untill visibility timesout
+        VisibilityTimeout: this.messageVisibilityTimeoutSeconds,
+        WaitTimeSeconds: DEFAULT_DEQUEUE_POLL_SECONDS,
         MaxNumberOfMessages: 10,
         // By default, SQS does not return message attributes unless explicitly requested.
         // "All" is a keyword that requests all attributes.
@@ -107,7 +110,7 @@ export class NoteSQSQueueService implements NoteQueueService {
       const { Messages } = await this.client.send(cmd);
       return Messages?.map(this.parseRawMessage) ?? [];
     } catch (error) {
-      throw convertSQSError(error);
+      throw convertSQSError(error,{tag:LOG_TAG,method:"peekMultipleMessages"});
     }
   }
 
@@ -190,7 +193,7 @@ export class NoteSQSQueueService implements NoteQueueService {
       });
       await this.client.send(cmd);
     } catch (error) {
-      throw convertSQSError(error);
+      throw convertSQSError(error,{tag:LOG_TAG,method:"removeMultilpleMessages"});
     }
   }
 }

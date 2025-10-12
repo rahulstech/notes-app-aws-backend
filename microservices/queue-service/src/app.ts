@@ -53,14 +53,10 @@ export class QueueApp {
       }
     }
     catch(error) {
-      LOGGER.logFatal(error, { tag: 'App', method: 'handleMessages' });
-      if (error instanceof AppError) {
-        if (!error.operational) {
-          process.exit(1); // TODO: change exit code
-        }
-      }
-      else {
-        throw error;
+      LOGGER.logFatal(error, { tag: 'QueueApp', method: 'handleMessages' });
+      const shouldExit = error instanceof AppError ? error.operational : true;
+      if (shouldExit) {
+        process.exit(1);
       }
     }
   }

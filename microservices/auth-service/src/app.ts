@@ -8,7 +8,8 @@ import { expressErrorHandler, expressNotFoundHandler } from "@notes-app/express-
 import { AuthApiRequest, AuthAppConfig } from "./types";
 
 export function createAuthExpressApp(config: AuthAppConfig): Express {
-
+    const authRepository = config.authRepositoryFactory.createAuthRepository();
+    const userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
     const app: Express = express();
 
     // install middlewares
@@ -20,8 +21,8 @@ export function createAuthExpressApp(config: AuthAppConfig): Express {
     app.use(express.json());
 
     app.use((req: AuthApiRequest,_,next: NextFunction) => {
-        req.authRepository = config.authRepositoryFactory.createAuthRepository();
-        req.userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
+        req.authRepository = authRepository;
+        req.userClaimExtractor = userClaimExtractor;
         next();
     })
 

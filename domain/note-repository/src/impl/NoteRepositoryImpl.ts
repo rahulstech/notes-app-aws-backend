@@ -45,7 +45,7 @@ import {
 } from '@notes-app/database-service';
 import { NoteObjectService } from '@notes-app/storage-service';
 import { createNoteMediaKey, createNoteShortContent, DIR_PREFIX_NOTE_MEDIAS, noteItemToNoteItemOutput, shortNoteItemToNoteItemOutputList } from '../helpers';
-import { AppError, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
+import { APP_ERROR_CODE, AppError, encodeBase64, executeBatch, LOGGER, newAppErrorBuilder, pickExcept, renameKeys  } from '@notes-app/common';
 import { convertNoteRepositoryError, convertToErrorItemOutput, NOTE_REPOSITORY_ERROR_CODES } from '../errors';
 
 const LOG_TAG = 'NoteRepositoryImpl';
@@ -301,9 +301,15 @@ export class NoteRepositoryImpl implements NoteRepository {
     if (filterd.length === 0) {
       throw newAppErrorBuilder()
             .setHttpCode(404)
-            .setCode(DYNAMODB_ERROR_CODES.MEDIA_ITEM_NOT_FOUND)
-            .addDetails('no media found by the given media ids')
-            .setRetriable(false)
+            .setCode(APP_ERROR_CODE.NOT_FOUND)
+            .addDetails({
+              description: "note media(s) not found",
+              context: {
+                class: "NoteRepositoryImpl",
+                method: "generateMediaUploadUrls",
+                PK, SK, media_ids
+              }
+            })
             .build()
     }
     const urls = await Promise.all(filterd.map(async ({media_id,key,type,size}) => { 

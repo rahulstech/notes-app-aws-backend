@@ -2,32 +2,30 @@
 set -e
 
 SCRIPT_DIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
-DDB_TEST_EP_PORT=5000
-DDB_TEST_REGION=ap-south-1
-DDB_TEST_CONTAINER=dynamodb-test
+DDB_DEV_EP_PORT=7000
+DDB_DEV_REGION=ap-south-1
+DDB_DEV_CONTAINER=dynamodb-dev
 
 # Export endpoint for tests
-export DYNAMODB_ENDPOINT=http://localhost:$DDB_TEST_EP_PORT
-export DYNAMODB_TEST_TABLE_NAME="user_notes"
+export DYNAMODB_LOCAL_ENDPOINT_URL=http://localhost:$DDB_DEV_EP_PORT
 
 # Stop previous container if running
 echo "Stoping exising container"
-docker stop $DDB_TEST_CONTAINER > /dev/null 2>&1 || true
+docker stop $DDB_DEV_CONTAINER > /dev/null 2>&1 || true
 
 # Start LocalStack DynamoDB
 echo "Creating and running container"
 docker run --rm -d \
-  -p $DDB_TEST_EP_PORT:4566 \
+  -p $DDB_DEV_EP_PORT:4566 \
   -e SERVICES="dynamodb" \
-  -e DYNAMODB_REGION=$DDB_TEST_REGION \
-  -e REGION=$DDB_TEST_REGION \
-  --name $DDB_TEST_CONTAINER localstack/localstack
+  -e DEFAULT_REGION=$DDB_DEV_REGION \
+  --name $DDB_DEV_CONTAINER localstack/localstack
 
 # Wait for LocalStack to be ready
 echo "Waiting for DynamoDB to start..."
 MAX_RETRIES=5
 for ((i=1; i<=MAX_RETRIES; i++)); do
-  if aws dynamodb list-tables --endpoint-url "$DYNAMODB_ENDPOINT" > /dev/null 2>&1; then
+  if aws dynamodb list-tables --endpoint-url "$DYNAMODB_LOCAL_ENDPOINT_URL" > /dev/null 2>&1; then
     echo "DynamoDB is ready!"
     break
   fi
@@ -44,12 +42,6 @@ done
 echo "Creating necessary table(s)"
 USER_NOTES_TABLE_JSON_FILE=$(realpath "$SCRIPT_DIR/../../../data/database/user_notes.table.json")
 aws dynamodb create-table \
-  --endpoint-url "$DYNAMODB_ENDPOINT" \
+  --endpoint-url "$DYNAMODB_LOCAL_ENDPOINT_URL" \
   --cli-input-json "file://$USER_NOTES_TABLE_JSON_FILE" > /dev/null
 
-# Run integration tests
-npx nx test @notes-app/database-service --configuration=integration
-
-# Stop container
-echo "Stoping container"
-docker stop $DDB_TEST_CONTAINER > /dev/null 2>&1 || true

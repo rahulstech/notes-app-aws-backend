@@ -1,9 +1,9 @@
-import { ENVIRONMENT, LOGGER } from "@notes-app/common";
+import { configenv, LOGGER } from "@notes-app/common";
 import { ApiGatewayUserClaimExtractor, DefaultUserClaimExtractor, UserClaim, UserClaimExtractorProvider } from "@notes-app/express-common";
 import jwt from 'jsonwebtoken';
 import { AuthApiRequest } from "../types";
 
-const { NODE_ENV } = ENVIRONMENT;
+const { NODE_ENV } = configenv();
 
 function devUserClaimExtractor(req: AuthApiRequest): UserClaim | null {
     const accessToken = req.accessToken;

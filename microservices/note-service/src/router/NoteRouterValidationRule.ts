@@ -1,4 +1,4 @@
-import { ENVIRONMENT } from '@notes-app/common';
+import { configenv } from '@notes-app/common';
 import joi from 'joi';
 
 const {
@@ -10,7 +10,7 @@ const {
   MAX_BATCH_REMOVE_MEDIAS_COUNT,
   MAX_ALLOWED_MEDIAS_PER_NOTE,
   MAX_ALLOWED_MEDIAS_SIZE_BYTES
-} = ENVIRONMENT;
+} = configenv();
 
 export const CreateNotesRule = {
   body: joi.object().keys({
