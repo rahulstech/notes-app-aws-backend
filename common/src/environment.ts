@@ -1,5 +1,6 @@
 import Joi = require("joi");
 import { validate } from "./validator";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from "./apperror";
 
 
 const COMMON_RULES = {
@@ -70,13 +71,36 @@ export function configenv(): Record<string,any> {
             default: rules = undefined;
         }
         if (rules !== undefined) {
-            const values = validate(rules, process.env);
-            process.env = {
-                ...process.env,
-                ...values,
-            };
+            try {
+                const values = validate(rules, process.env);
+                process.env = {
+                    ...process.env,
+                    ...values,
+                };
+            }
+            catch(error) {
+                let apperror: AppError;
+                if (error instanceof AppError) {
+                    error.operational = false;
+                    error.code = APP_ERROR_CODE.INTERNAL_SERVER_ERROR;
+                    error.httpCode = 500;
+                    apperror = error;
+                }
+                else {
+                    apperror = newAppErrorBuilder()
+                                .setHttpCode(500)
+                                .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
+                                .setOperational(false)
+                                .addDetails({
+                                    description:"environment variable validation error",
+                                    reason: toErrorReason(error),
+                                })
+                                .build();
+                }
+                throw apperror;
+            }
         }
-        // processed = true;
+        processed = true;
     }
     return process.env as Record<string,any>;
 }

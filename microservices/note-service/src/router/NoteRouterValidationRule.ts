@@ -86,6 +86,7 @@ export const AddNoteMediasRule = {
         )
         .min(1)
         .max(MAX_ALLOWED_MEDIAS_PER_NOTE)
+        .required()
       })
       .rename('note_id','SK')
     )

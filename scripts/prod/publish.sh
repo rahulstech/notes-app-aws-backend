@@ -2,11 +2,14 @@
 
 set -e 
 
-npm run build:auth-service
+echo "building auth-service"
+npm run build:auth-service > /dev/null 2>&1
 
-npm run build:note-service
+echo "building note-service"
+npm run build:note-service > /dev/null 2>&1
 
-npm run build:queue-service
+echo "building queue-service"
+npm run build:queue-service > /dev/null 2>&1
 
 SCRIPT_DIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
 MICROSERVICES_DIR=$(realpath "$SCRIPT_DIR/../../dist/microservices")

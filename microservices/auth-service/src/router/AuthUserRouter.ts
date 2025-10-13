@@ -67,11 +67,7 @@ usersRouter.post('/email/verify',
         res.sendStatus(200);
     }));
 
-const profileRoutes = Router({
-    mergeParams: true,
-});
-
-profileRoutes.route('/')
+usersRouter.route('/')
     .get( 
     catchError(async (req: AuthApiRequest, res: Response) => {
         const profile = await req.authRepository.getUserProfile({
@@ -105,7 +101,7 @@ usersRouter.get('/',
         res.json({ profile });
     }));
 
-profileRoutes.get('/photo/uploadurl',
+usersRouter.get('/photo/uploadurl',
     validateRequest(UserPhotUploadUrlRules),
     catchError(async (req: AuthApiRequest, res: Response) => {
         const { body } = req.validValue;
@@ -118,13 +114,11 @@ profileRoutes.get('/photo/uploadurl',
     })
 )
 
-profileRoutes.delete('/photo', 
+usersRouter.delete('/photo', 
     catchError(async (req: AuthApiRequest, res: Response) => {
         await req.authRepository.removeProfilePhoto(req.accessToken);
         res.sendStatus(200);
     })
 )
-
-usersRouter.use("/profile", profileRoutes);
 
 export { usersRouter }

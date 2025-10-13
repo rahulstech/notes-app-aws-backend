@@ -7,12 +7,12 @@
 
     "test:unit:database-service": "nx test @notes-app/database-service --configuration=unit",
     "test:integration:database-service": "./scripts/test/integration/database-service.sh",
-
     "test:unit:queue-service": "nx test @notes-app/queue-service --configuration=unit",
     "test:integration:queue-service": "./scripts/test/integration/queue-service.sh",
-
     "test:unit:storage-service": "nx test @notes-app/storage-service --configuration=unit",
     "test:integration:storage-service": "./scripts/test/integration/storage-service.sh",
+
+    "exe:database": "./scripts/dev/database-service.sh",
 
     "dev:auth-service": "nx build auth-service && node --env-file=.env-DEV dist/microservices/auth-service/main.js",
     "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/main.js",

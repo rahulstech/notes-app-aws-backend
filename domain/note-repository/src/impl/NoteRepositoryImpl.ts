@@ -33,13 +33,11 @@ import {
   UpdateNoteItemOutput,
   CreateNoteItemOutput,
   GetNoteIdsOutput,
-  GetNoteIdsInput,
+  GetNoteIdsInput
 } from '../types';
 import {
   CreateNoteDataInputItem,
-  DYNAMODB_ERROR_CODES,
   NoteDataService,
-  NoteItem,
   NoteMediaItem,
   NoteMediaStatus,
 } from '@notes-app/database-service';
@@ -86,21 +84,20 @@ export class NoteRepositoryImpl implements NoteRepository {
       if (outputs.length > 0) {
         return { 
           notes: outputs.map(item => {
-            const error = item.error;
-            const output = noteItemToNoteItemOutput(item as NoteItem);
-            if (error) {
+            const output = renameKeys(item,{'SK':'note_id'}) as CreateNoteItemOutput;
+            if (item.error) {
               return {
                 ...output,
-                error: convertToErrorItemOutput(error),
+                error: convertToErrorItemOutput(item.error),
               }
             }
-            return output as CreateNoteItemOutput;
+            return output;
           }) 
         }
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{ tag: LOG_TAG, method: "createNotes"});
     }
 
     // no items created due to db data service error
@@ -122,7 +119,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"getNote"});
     }
   }
 
@@ -132,7 +129,7 @@ export class NoteRepositoryImpl implements NoteRepository {
     const { PK, limit, pageMark } = input;
     try {
       const output = await this.db.getNotes(PK,limit,pageMark);
-      const notes = shortNoteItemToNoteItemOutputList(output.notes);
+      const notes = output.notes.map(item => renameKeys(item,{'SK': 'note_id'}) as any);
       return {
         limit: output.limit,
         count: notes.length,
@@ -141,19 +138,25 @@ export class NoteRepositoryImpl implements NoteRepository {
       };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"getNotes"});
     }
   }
 
   public async getNoteIds(input: GetNoteIdsInput): Promise<GetNoteIdsOutput> {
-    const output = await this.db.getNoteIds(input.PK,input.limit,input.pageMark);
-    return {
-      limit: output.limit,
-      count: output.SKs.length,
-      pageMark: output.pageMark,
-      note_ids: output.SKs
+    try {
+      const output = await this.db.getNoteIds(input.PK,input.limit,input.pageMark);
+      return {
+        limit: output.limit,
+        count: output.SKs.length,
+        pageMark: output.pageMark,
+        note_ids: output.SKs
+      };
+    }
+    catch(error) {
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"getNoteIds"})
     }
   }
+
   // update notes
 
   public async updateNotes(input: UpdateNotesInput): Promise<UpdateNotesOutput> {
@@ -183,7 +186,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"updateNotes"});
     }
   }
 
@@ -207,7 +210,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { unsuccessful };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"deleteNotes"});
     }
   }
 
@@ -217,6 +220,8 @@ export class NoteRepositoryImpl implements NoteRepository {
 
   public async addMedias(input: AddMediasInput): Promise<AddMediasOutput> {
     const { PK, inputs } = input;
+
+    LOGGER.logDebug('add medias',{tag:LOG_TAG,PK,inputs});
 
     // save new note medias in db
     try {
@@ -244,7 +249,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs: outputs as AddMediaItemOutput[] };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"addMedias"});
     }
   }
 
@@ -285,7 +290,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { outputs };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"getMediaUploadUrls"});
     }
   }
 
@@ -342,6 +347,7 @@ export class NoteRepositoryImpl implements NoteRepository {
 
   public async updateMediaStatus(input: UpdateMediaStatusInput): Promise<UpdateMediaStatusOutput> {
     const { PK, inputs } = input;
+    LOGGER.logDebug('update media status', {tag:LOG_TAG,PK,inputs});
     try {
       const items = (await executeBatch(
           Object.entries(inputs),
@@ -352,6 +358,7 @@ export class NoteRepositoryImpl implements NoteRepository {
             }
             catch(error) {
               const dberror = error as AppError;
+              LOGGER.logDebug('update media status error',dberror);
               if (!dberror.retriable) {
                 return status;
               }
@@ -365,7 +372,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { items };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"updateMediaStatus"});
     }
   }
 
@@ -417,7 +424,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       }
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"removeMedias"});
     }
   }
 
@@ -428,7 +435,7 @@ export class NoteRepositoryImpl implements NoteRepository {
       return { unsuccessful };
     }
     catch(error) {
-      throw convertNoteRepositoryError(error);
+      throw convertNoteRepositoryError(error,{tag:LOG_TAG,method:"deleteMediasByKey"});
     }
   }
 

@@ -61,7 +61,7 @@ export function expressErrorHandler(): ErrorRequestHandler {
 
     const appError = convertToAppError(error);
 
-    LOGGER.logFatal("api error", { error: appError });
+    LOGGER.logFatal("api error", appError);
 
     const errorResponse: ErrorResponse = {
       code: appError.code,
@@ -74,7 +74,7 @@ export function expressErrorHandler(): ErrorRequestHandler {
 
     // exit if operational=false
     if (!appError.operational) {
-      process.exit(1);
+      setTimeout(()=>process.exit(1),2000);
     }
   };
 }

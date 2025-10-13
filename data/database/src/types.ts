@@ -27,11 +27,11 @@ export interface NoteItem {
   timestamp_modified: number;
 }
 
-export type ShortNoteItem = Omit<NoteItem, "content">;
+export type ShortNoteItem = Omit<NoteItem, "content"|"medias">;
 
 export type CreateNoteDataInputItem = Pick<NoteItem,'global_id'|'title'|'content'|'short_content'|'timestamp_created'|'timestamp_modified'>;
 
-export type CreateNoteDataOutputItem = Pick<NoteItem,'global_id'|'title'|'short_content'|'content'|'timestamp_created'|'timestamp_modified'> & { error?: AppError };
+export type CreateNoteDataOutputItem = Pick<NoteItem,'global_id'|'title'|'short_content'|'content'|'timestamp_created'|'timestamp_modified'> & { SK?: string; error?: AppError };
 
 export interface CreateNoteDataInput {
   PK: string;

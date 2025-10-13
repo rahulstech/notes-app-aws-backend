@@ -2,15 +2,14 @@
 set -e
 
 SCRIPT_DIR=$(realpath $(dirname ${BASH_SOURCE[0]}))
+USER_NOTES_TABLE_JSON_FILE=$(realpath "$SCRIPT_DIR/../../data/database/user_notes.table.json")
 DDB_DEV_EP_PORT=7000
 DDB_DEV_REGION=ap-south-1
 DDB_DEV_CONTAINER=dynamodb-dev
-
-# Export endpoint for tests
-export DYNAMODB_LOCAL_ENDPOINT_URL=http://localhost:$DDB_DEV_EP_PORT
+DYNAMODB_LOCAL_ENDPOINT_URL=http://localhost:$DDB_DEV_EP_PORT
 
 # Stop previous container if running
-echo "Stoping exising container"
+echo "Stoping existing container"
 docker stop $DDB_DEV_CONTAINER > /dev/null 2>&1 || true
 
 # Start LocalStack DynamoDB
@@ -40,8 +39,8 @@ done
 
 # Create the table
 echo "Creating necessary table(s)"
-USER_NOTES_TABLE_JSON_FILE=$(realpath "$SCRIPT_DIR/../../../data/database/user_notes.table.json")
 aws dynamodb create-table \
   --endpoint-url "$DYNAMODB_LOCAL_ENDPOINT_URL" \
   --cli-input-json "file://$USER_NOTES_TABLE_JSON_FILE" > /dev/null
 
+echo "Done"

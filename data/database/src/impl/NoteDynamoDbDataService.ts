@@ -300,6 +300,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
     const { SK } = input;
     const SetExpressions: string[] = [];
     const ExpressionAttributeValues: Record<string,any> = {
+      ":PK": PK,
       ":SK": SK,
     };
     SetExpressions.push(`timestamp_modified = :timestamp_modified`);
@@ -327,7 +328,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       }));
       return {
         SK,
-        ...unmarshall(Attributes!), // TODO: can Attribute be undefined or null even if there is no error
+        ...unmarshall(Attributes!),
       };
     }
     catch(error) {
@@ -409,7 +410,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
     // separate medias by existing and non-existing by media global_id
     const { nonExistingMedias, existingMedias } = await this.filterMedias(inputs,mediaItems);
 
-    LOGGER.logDebug("", { tag: LOG_TAG, method: "addNoteMedias", PK, SK, existingMedias, nonExistingMedias });
+    LOGGER.logDebug("add note medias", { tag: LOG_TAG, method: "addNoteMedias", PK, SK, existingMedias, nonExistingMedias });
 
     if (nonExistingMedias.length > 0) {
       // adding new medias must not exceed the per note allowed max media count
@@ -531,7 +532,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
       '#status': 'status'
     };
     const AttributeValues: Record<string, any> = {
-      ":PK": SK,
+      ":PK": PK,
       ":SK": SK,
     };
     items.forEach(({media_id,status}, index) => {

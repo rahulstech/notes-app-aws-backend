@@ -1,4 +1,5 @@
-import { APP_ERROR_CODE, newAppErrorBuilder } from "./apperror";
+import { APP_ERROR_CODE, AppError, newAppErrorBuilder } from "./apperror";
+import { LOGGER } from "./logger";
 
 export function encodeBase64(input: string, encoding: BufferEncoding = 'utf-8'): string {
     return Buffer.from(input, encoding).toString('base64url')
@@ -124,5 +125,19 @@ export async function executeBatch<I,O>(items: I[], builder: (item: I)=>Promise<
     }
     return alloutputs;
 }
-  
-  
+
+
+export function installUnexpectedErrorHandlers() {
+
+    process.on('uncaughtException',handleUnexpectedError);
+
+    process.on('unhandledRejection',handleUnexpectedError);
+}
+
+function handleUnexpectedError(error: any) {
+    LOGGER.logFatal('unexpected error', error);
+    const shouldExit: boolean = error instanceof AppError ? error.operational : true;
+    if (shouldExit) {
+        setTimeout(() => process.exit(1), 2000);
+    }
+}

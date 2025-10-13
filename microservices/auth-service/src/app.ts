@@ -1,7 +1,7 @@
 import { Express, NextFunction } from "express";
 import express from "express";
 import { authRouter } from "./router/AuthRouter";
-import { usersRouter } from "./router/AuthUsersRouter";
+import { usersRouter } from "./router/AuthUserRouter";
 import helmet from "helmet";
 import cors from "cors";
 import { expressErrorHandler, expressNotFoundHandler } from "@notes-app/express-common";
@@ -30,7 +30,7 @@ export function createAuthExpressApp(config: AuthAppConfig): Express {
 
     app.use('/auth', authRouter);
 
-    app.use('/auth/users', usersRouter);
+    app.use('/auth/user', usersRouter);
 
     // error handlers 
 

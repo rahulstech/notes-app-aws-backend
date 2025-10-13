@@ -1,5 +1,5 @@
 import { NextFunction, RequestHandler } from 'express';
-import { APP_ERROR_CODE, AppError, newAppErrorBuilder, pickOnly, validate, ValidationRule } from '@notes-app/common';
+import { APP_ERROR_CODE, AppError, LOGGER, newAppErrorBuilder, pickOnly, validate, ValidationRule } from '@notes-app/common';
 import { BaseRequest } from '../types';
 
 export function validateRequest(rule: Record<string,ValidationRule>, fields: string[] = ['body']): RequestHandler {
@@ -10,7 +10,9 @@ export function validateRequest(rule: Record<string,ValidationRule>, fields: str
     fields.forEach(key => {
       if (rule[key]) {
         try {
-          const validValue = validate(rule[key], input[key]);
+          const data = input[key];
+          LOGGER.logDebug('validate request',{tag:"validateRequest",data});
+          const validValue = validate(rule[key], data);
           allValidValue[key] = validValue;
         }
         catch(error) {
