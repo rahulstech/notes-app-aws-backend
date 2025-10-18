@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Playground</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <nav>
+                <a href="#about" class="nav-link active">About</a>
+                <div class="endpoint-group">
+                    <h3>Notes</h3>
+                    <ul class="endpoint-list">
+                        <li><a href="#" data-url="/notes" data-method="POST" data-description="Create one or more notes. Up to 25 notes can be created in a single request.">Create Notes</a></li>
+                        <li><a href="#" data-url="/notes" data-method="GET" data-description="Get all notes, sorted by creation date in descending order. You can fetch between 1 and 100 notes at a time, with a default of 100. Use the 'pageMark' from a previous request to get the next page of results.">Get all notes</a></li>
+                        <li><a href="#" data-url="/notes/" data-method="GET" data-description="Get a single detailed note by its ID.">Get note by id</a></li>
+                        <li><a href="#" data-url="/notes" data-method="PATCH" data-description="Update one or more notes. A maximum of 25 notes can be updated in a single request.">Update notes</a></li>
+                        <li><a href="#" data-url="/notes" data-method="DELETE" data-description="Delete one or more notes by their ID. Up to 25 notes can be deleted in a single request.">Delete notes</a></li>
+                    </ul>
+                </div>
+                <div class="endpoint-group">
+                    <h3>Medias</h3>
+                    <ul class="endpoint-list">
+                        <li><a href="#" data-url="/medias" data-method="POST" data-description="Add media metadata to one or more notes. Each note can have up to 5 media items. Only images up to 10MB are currently supported. This endpoint registers the media's metadata (size, type, etc.); it does not upload the file. After adding the metadata, use the 'Get upload URLs' endpoint to get the URLs for uploading the actual files.">Add medias</a></li>
+                        <li><a href="#" data-url="/medias/uploadurl" data-method="PUT" data-description="Retrieve the URLs required to upload media files. Provide the media IDs to get their corresponding upload URLs.">Get upload urls</a></li>
+                        <li><a href="#" data-url="/medias/upload" data-method="PUT" data-description="Upload a media file to the URL obtained from the 'Get upload URLs' endpoint. The request body for this endpoint should be the media file itself, and the Content-Type header will be set to the file's type.">Upload a media</a></li>
+                        <li><a href="#" data-url="/medias" data-method="DELETE" data-description="Remove one or more media items from a note by their media IDs.">Remove medias</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+        <main class="main-content">
+            <section id="about">
+                <h2>About This API Playground</h2>
+                <p>This playground offers a way to quickly test the Notes App API. While the real API requires authentication, this environment is open and does not require any login.</p>
+                <div class="warning">
+                    <p><strong>Heads up!</strong> This is a public playground. Any notes you create or media you upload will be visible to other users, and you will see their data as well. Please do not use any sensitive or personal information here.</p>
+                </div>
+            </section>
+            <section id="endpoints" style="display: none;">
+                <h2 id="endpoint-header"></h2>
+                <p id="endpoint-description"></p>
+                <api-request-form></api-request-form>
+                <div class="tabs">
+                    <div class="tab-headers">
+                        <div class="tab-header active" data-tab="request">Request</div>
+                        <div class="tab-header" data-tab="response">Response</div>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane active" id="request-tab">
+                            <details open>
+                                <summary>Body</summary>
+                                <pre id="request-body" contenteditable="true"></pre>
+                            </details>
+                        </div>
+                        <div class="tab-pane" id="response-tab">
+                            <div id="loader" class="loader" style="display: none;"></div>
+                            <div id="response-status"></div>
+                            <details open>
+                                <summary>Headers</summary>
+                                <pre id="response-headers"></pre>
+                            </details>
+                            <details open>
+                                <summary>Body</summary>
+                                <pre id="response-content"></pre>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
