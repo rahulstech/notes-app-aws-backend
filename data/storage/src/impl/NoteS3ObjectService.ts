@@ -7,9 +7,10 @@ import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
+  StorageClass,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ObjectUploadUrlInput, ObjectUploadUrlOutput } from '../types';
+import { ObjectAccessType, ObjectUploadUrlInput, ObjectUploadUrlOutput } from '../types';
 import { convertS3Error, S3_ERROR_CODES } from '../errors';
 import { executeChunk, LOGGER } from '@notes-app/common';
 
@@ -20,7 +21,13 @@ export interface NoteS3ObjectServiceOptions {
   bucket: string;
   mediaBaseUrl: string;
   client: S3Client;
-}
+};
+
+const ObjectAccessTypeToStorageClass: Record<ObjectAccessType,StorageClass> = {
+  "Instant": "STANDARD",
+  "Infrequent": "STANDARD_IA",
+  "Rare": "GLACIER_IR"
+};
 
 export class NoteS3ObjectService implements NoteObjectService {
   private client: S3Client;
@@ -34,13 +41,15 @@ export class NoteS3ObjectService implements NoteObjectService {
   }
 
   public async getObjectUploadUrl(input: ObjectUploadUrlInput): Promise<ObjectUploadUrlOutput> {
-    const { key: Key, mime_type, size, expires_in } = input;
+    const { key: Key, mime_type, size, expires_in, accessType } = input;
+    const StorageClass = ObjectAccessTypeToStorageClass[accessType ?? "Instant"];
     const expiresIn = expires_in ? expires_in : PRESIGNED_URL_EXPIRES_IN;
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key,
       ContentType: mime_type,
-      ContentLength: size
+      ContentLength: size,
+      StorageClass,
     });
     try {
       const upload_url = await getSignedUrl(this.client, cmd, { expiresIn });

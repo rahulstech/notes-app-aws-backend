@@ -9,4 +9,5 @@ export interface NoteApiExpressRequest extends BaseRequest, AuthenticatedApiGate
 export interface NoteExpressAppConfiguration {
     noteRepositoryFactory: NoteRepositoryFactory;
     userClaimExtractorProvider: UserClaimExtractorProvider;
+    endpointPrefix?: string;
 }

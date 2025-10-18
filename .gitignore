@@ -1,8 +1,8 @@
 node_modules
 dist
-.env
 .env-DEV
-.env-PROD
+.env-PROD.json
+environment.json
 
 /tmp
 .nx/cache

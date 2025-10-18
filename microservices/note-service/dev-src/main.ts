@@ -1,32 +1,29 @@
-import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
-import { createNoteExpressApp } from "./app";
-import { NoteExpressAppConfiguration } from "./types";
 import { configenv, installUnexpectedErrorHandlers, LOGGER } from "@notes-app/common";
+import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
+import { createNoteExpressApp } from "../src/app";
+import { NoteExpressAppConfiguration } from "../src/types";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
-import serverless from "serverless-http";
 import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
 installUnexpectedErrorHandlers();
 
-configenv();
+const { NOTE_SERVICE_SERVER_PORT } = configenv();
 
-// build the app configuration
 const config: NoteExpressAppConfiguration = {
   noteRepositoryFactory: new NoteRepositoryFactoryImpl(
-    new NoteDataServiceFactoryImpl(),
-    new NoteObjectServiceFactoryImpl(),
-    new NoteQueueServiceFactoryImpl()
-  ),
+                          new NoteDataServiceFactoryImpl(),
+                          new NoteObjectServiceFactoryImpl(),
+                          new NoteQueueServiceFactoryImpl()
+                        ),
   userClaimExtractorProvider: new UserClaimExtractorProviderImpl(),
-};
+}
 
-// create express app
 const app = createNoteExpressApp(config);
 
-// wrap with serverless-http
-export const handler = serverless(app, {});
+const PORT = NOTE_SERVICE_SERVER_PORT;
 
-// log init (cold start)
-LOGGER.logInfo("note-service initialized");
+app.listen(PORT, () => {
+  LOGGER.logInfo(`server running http://localhost:${PORT}`);
+});

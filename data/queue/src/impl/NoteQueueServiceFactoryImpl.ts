@@ -5,9 +5,8 @@ import { NoteSQSQueueService } from "./NoteSQSQueueService";
 import { SQSClient } from "@aws-sdk/client-sqs";
 
 const {
-    NODE_ENV,
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
+    AWS_ID,
+    AWS_SECRET,
     SQS_REGION,
     SQS_URL
   } = configenv();
@@ -17,8 +16,8 @@ export class NoteQueueServiceFactoryImpl implements NoteQueueServiceFactory {
         const client = new SQSClient({
         region: SQS_REGION,
         credentials: {
-          accessKeyId: AWS_ACCESS_KEY_ID,
-          secretAccessKey: AWS_SECRET_ACCESS_KEY,
+          accessKeyId: AWS_ID,
+          secretAccessKey: AWS_SECRET,
         }
       })
       return new NoteSQSQueueService({

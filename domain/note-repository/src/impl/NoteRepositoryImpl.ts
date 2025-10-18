@@ -323,7 +323,8 @@ export class NoteRepositoryImpl implements NoteRepository {
           key,
           mime_type: type,
           size,
-          expires_in: NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS
+          expires_in: NOTE_MEDIAS_UPLOAD_URL_EXPIRES_IN_SECONDS,
+          accessType: 'Infrequent',
         });
         return {
           media_id,

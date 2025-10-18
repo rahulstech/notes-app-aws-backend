@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",
-    "types": ["node", "express", "joi"]
+    "types": ["node", "express","joi"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts","dev-src/**/*.ts"]
 }

@@ -1,27 +1,29 @@
-import { configenv, LOGGER } from "@notes-app/common";
 import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
-import { createNoteExpressApp } from "./app";
-import { NoteExpressAppConfiguration } from "./types";
+import { createNoteExpressApp } from "../src/app";
+import { NoteExpressAppConfiguration } from "../src/types";
+import { configenv } from "@notes-app/common";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
+import serverless from "serverless-http";
 import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
-const { NOTE_SERVICE_SERVER_PORT } = configenv();
+configenv();
 
+// build the app configuration
 const config: NoteExpressAppConfiguration = {
   noteRepositoryFactory: new NoteRepositoryFactoryImpl(
-                          new NoteDataServiceFactoryImpl(),
-                          new NoteObjectServiceFactoryImpl(),
-                          new NoteQueueServiceFactoryImpl()
-                        ),
+    new NoteDataServiceFactoryImpl(),
+    new NoteObjectServiceFactoryImpl(),
+    new NoteQueueServiceFactoryImpl()
+  ),
   userClaimExtractorProvider: new UserClaimExtractorProviderImpl(),
-}
+  endpointPrefix: "/playground"
+};
 
+// create express app
 const app = createNoteExpressApp(config);
 
-const PORT = NOTE_SERVICE_SERVER_PORT;
+// wrap with serverless-http
+export const handler = serverless(app, {});
 
-app.listen(PORT, () => {
-  LOGGER.logInfo(`server running http://localhost:${PORT}`);
-});

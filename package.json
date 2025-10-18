@@ -4,25 +4,24 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-
     "test:unit:database-service": "nx test @notes-app/database-service --configuration=unit",
     "test:integration:database-service": "./scripts/test/integration/database-service.sh",
     "test:unit:queue-service": "nx test @notes-app/queue-service --configuration=unit",
     "test:integration:queue-service": "./scripts/test/integration/queue-service.sh",
     "test:unit:storage-service": "nx test @notes-app/storage-service --configuration=unit",
     "test:integration:storage-service": "./scripts/test/integration/storage-service.sh",
-
     "exe:database": "./scripts/dev/database-service.sh",
-
     "dev:auth-service": "nx build auth-service && node --env-file=.env-DEV dist/microservices/auth-service/main.js",
-    "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/main.js",
+    "dev:note-service": "nx build note-service && node --env-file=.env-DEV dist/microservices/note-service/development/main.js",
     "dev:queue-service": "nx build queue-service && node --env-file=.env-DEV dist/microservices/queue-service/main.js",
-    
-    "build:auth-service": "nx run auth-service:build:production",
-    "build:note-service": "nx run note-service:build:production",
-    "build:queue-service": "nx run queue-service:build:production",
-
-    "publish": "./scripts/prod/publish.sh"
+    "build:auth-service": "nx run auth-service:build:production --skip-nx-cache",
+    "build:note-service": "nx run note-service:build:production --skip-nx-cache",
+    "build:queue-service": "nx run queue-service:build:production --skip-nx-cache",
+    "build:playground": "nx run note-service:build:playground --skip-nx-cache",
+    "publish": "./scripts/prod/publish.sh",
+    "deploy": "./scripts/prod/deploy.sh .env-PROD.json",
+    "deploy:playground": "./scripts/prod/deploy.sh .env-PROD.json playground",
+    "deploy:note-service": "./scripts/prod/deploy.sh .env-PROD.json note-service"
   },
   "repository": {
     "type": "git",
@@ -36,22 +35,20 @@
   "homepage": "https://github.com/rahulstech/notes-app-aws-backend#readme",
   "description": "",
   "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.894.0",
-    "@aws-sdk/client-dynamodb": "^3.873.0",
-    "@aws-sdk/client-s3": "^3.873.0",
-    "@aws-sdk/client-sqs": "^3.873.0",
-    "@aws-sdk/s3-request-presigner": "^3.873.0",
-    "@aws-sdk/util-dynamodb": "^3.873.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "joi": "^18.0.1",
-    "jsonwebtoken": "^9.0.2",
     "pino": "^9.9.4",
     "serverless-http": "^4.0.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.913.0",
+    "@aws-sdk/client-dynamodb": "^3.913.0",
+    "@aws-sdk/client-s3": "^3.913.0",
+    "@aws-sdk/client-sqs": "^3.913.0",
+    "@aws-sdk/s3-request-presigner": "^3.913.0",
+    "@aws-sdk/util-dynamodb": "^3.913.0",
     "@eslint/js": "^9.8.0",
     "@nx/esbuild": "^21.4.0",
     "@nx/eslint": "21.4.0",
@@ -63,7 +60,6 @@
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
     "@types/aws-lambda": "^8.10.152",
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
     "@types/joi": "^17.2.2",
@@ -75,8 +71,8 @@
     "jest-environment-node": "^30.0.2",
     "jest-util": "^30.0.2",
     "jsonc-eslint-parser": "^2.1.0",
+    "jsonwebtoken": "^9.0.2",
     "nx": "21.4.0",
-    "pino-pretty": "^13.1.1",
     "prettier": "^2.6.2",
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",

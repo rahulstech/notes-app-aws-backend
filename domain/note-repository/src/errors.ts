@@ -39,6 +39,14 @@ function createFromAppError(error: AppError, context?: any): AppError {
       });
     }
     break;
+    case APP_ERROR_CODE.NOT_FOUND: {
+      builder.addDetails({
+        description:"not found",
+        context,
+        reason: error
+      })
+    }
+    break;
     case APP_ERROR_CODE.INTERNAL_SERVER_ERROR:
     default: {
       builder.addDetails({

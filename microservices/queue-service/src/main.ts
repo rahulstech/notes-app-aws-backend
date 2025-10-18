@@ -1,6 +1,6 @@
 import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
-import { NoteQueueServiceFactoryImpl, QueueMessageEventType } from "@notes-app/queue-service";
-import { LOGGER } from "@notes-app/common";
+import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
+import { configenv, installUnexpectedErrorHandlers, LOGGER } from "@notes-app/common";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { EventHandlerRegistry } from "./types";
@@ -8,6 +8,10 @@ import { buildEventHandlerRegistry } from "./eventhandler";
 import { QueueApp } from "./app";
 import { AuthRepositoryFactoryImpl } from "@notes-app/auth-repository";
 import { AuthServiceFactoryImpl } from "@notes-app/authentication";
+
+installUnexpectedErrorHandlers();
+
+configenv();
 
 const queueFactory = new NoteQueueServiceFactoryImpl();
 const storageFactory = new NoteObjectServiceFactoryImpl();

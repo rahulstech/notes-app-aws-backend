@@ -96,4 +96,15 @@ describe("NoteS3ObjectService integration test", () => {
 
         await expect(getAllKeys(testClient,prefix)).resolves.toStrictEqual([]);
     })
+
+    test("getObjectUploadUrl", async ()=> {
+        // await expect(service.getObjectUploadUrl({
+        //     key: "key1",
+        //     size: 2000,
+        //     mime_type: "image/jpg",
+        //     accessType: 'Instant',
+        //     temporary: true
+        // })).resolves
+        // .toEqual()
+    })
 })

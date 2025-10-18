@@ -5,6 +5,12 @@
   "references": [
     {
       "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.dev.json"
+    },
+    {
+      "path": "./tsconfig.playground.json"
     }
   ],
   "compilerOptions": {

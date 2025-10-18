@@ -5,8 +5,8 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 const {
   NODE_ENV,
-  AWS_ACCESS_KEY_ID,
-  AWS_SECRET_ACCESS_KEY,
+  AWS_ID,
+  AWS_SECRET,
   DYNAMODB_REGION,
   DYNAMODB_NOTES_TABLE,
   DYNAMODB_LOCAL_ENDPOINT_URL,
@@ -39,8 +39,8 @@ export class NoteDataServiceFactoryImpl implements NoteDataServiceFactory {
       const client = new DynamoDBClient({
         region: DYNAMODB_REGION,
         credentials: {
-          accessKeyId: AWS_ACCESS_KEY_ID,
-          secretAccessKey: AWS_SECRET_ACCESS_KEY,
+          accessKeyId: AWS_ID,
+          secretAccessKey: AWS_SECRET,
         }
       });
 

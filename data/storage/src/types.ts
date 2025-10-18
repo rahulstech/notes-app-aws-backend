@@ -1,14 +1,19 @@
+import { StorageClass } from "@aws-sdk/client-s3";
+
 export interface MediaObject {
   key: string;
   mime_type: string;
   size: number;
 }
 
+export type ObjectAccessType = "Instant" | "Infrequent" | "Rare";
+
 export interface ObjectUploadUrlInput {
   key: string;
   mime_type: string;
   size: number;
   expires_in?: number;
+  accessType?:  ObjectAccessType;
 }
 
 export type ObjectUploadHttpMethod = 'PUT' | 'POST';

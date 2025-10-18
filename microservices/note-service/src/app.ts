@@ -1,15 +1,16 @@
 import type { Express, NextFunction } from 'express';
 import express from 'express';
-import notesRouter from './router/NotesRouter';
 import { NoteApiExpressRequest, NoteExpressAppConfiguration } from './types';
 import helmet from 'helmet';
-import cors from 'cors';
 import { expressErrorHandler, expressNotFoundHandler, extractUserClaim } from '@notes-app/express-common'
+import { notesRouter } from './router/NotesRouter';
+import { mediasRouter } from './router/MediasRouter';
 
 export function createNoteExpressApp(config: NoteExpressAppConfiguration): Express {
 
     const noteRepository = config.noteRepositoryFactory.createNoteRepository();
-    const userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
+    const userClaimExtractor = config.userClaimExtractorProvider.getUserClaimExtractor();
+    const endpointPrefix = config.endpointPrefix ?? "";
     const app: Express = express();
 
     /////////////////////////////////////////////////
@@ -18,7 +19,13 @@ export function createNoteExpressApp(config: NoteExpressAppConfiguration): Expre
 
     app.use(helmet());
 
-    app.use(cors());
+    // In production CORS will be implemented via API Gateway
+    app.use((_,res,next)=>{
+        res.setHeader("Access-Control-Allow-Origin","*");
+        res.setHeader("Access-Control-Allow-Headers","*");
+        res.setHeader("Access-Control-Allow-Methods","*");
+        next();
+    })
 
     app.use(express.json());
 
@@ -34,7 +41,9 @@ export function createNoteExpressApp(config: NoteExpressAppConfiguration): Expre
     ///                 Routers                  ///
     ///////////////////////////////////////////////
 
-    app.use('/notes', notesRouter);
+    app.use(`${endpointPrefix}/notes`, notesRouter);
+    
+    app.use(`${endpointPrefix}/medias`, mediasRouter);
 
     /////////////////////////////////////////////////
     ///              Error Handler               ///

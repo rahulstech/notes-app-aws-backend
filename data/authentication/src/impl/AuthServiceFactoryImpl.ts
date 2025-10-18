@@ -4,8 +4,8 @@ import { AuthServiceFactory } from "../AuthServiceFactory";
 import { CognitoAuthServiceImpl } from "./CognitoAuthServiceImpl";
 
 const {
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
+    AWS_ID,
+    AWS_SECRET,
     COGNITO_REGION,
     COGNITO_CLIENT_ID,
     COGNITO_USER_POOL_ID,
@@ -17,8 +17,8 @@ export class AuthServiceFactoryImpl implements AuthServiceFactory {
 
     public createAuthService(): AuthService {
         return new CognitoAuthServiceImpl({
-            accessKeyId: AWS_ACCESS_KEY_ID,
-            secretAccessKey: AWS_SECRET_ACCESS_KEY,
+            accessKeyId: AWS_ID,
+            secretAccessKey: AWS_SECRET,
             region: COGNITO_REGION,
             clientId: COGNITO_CLIENT_ID,
             userPoolId: COGNITO_USER_POOL_ID,

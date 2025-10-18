@@ -197,7 +197,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
 
   /**
    * Get multiple notes upto given limit for the user. notes are sorted 
-   * by timestamp_created in descending order.
+   * by timestamp_created in ascending order.
    * 
    * @param PK partition key i.e. user id
    * @param limit max no of notes
@@ -217,7 +217,7 @@ export class NoteDynamoDbDataService implements NoteDataService {
         Limit,
         ExclusiveStartKey: pageMark && JSON.parse(decodeBase64(pageMark)),
         IndexName: 'OrderNoteByCreatedIndex', // use index to use different sort key for ordering
-        ScanIndexForward: false, // false = order desc
+        ScanIndexForward: true, // true = order ascending
       }));
       return {
         notes: Items?.map((Item) => {

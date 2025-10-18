@@ -7,7 +7,7 @@ export type LogExtras = Record<string,any>;
 export class LogExtrasBuilder {
 
   public static create(src?: LogExtras): LogExtrasBuilder {
-    return new LogExtrasBuilder();
+    return new LogExtrasBuilder(src);
   }
 
   private extras: LogExtras;
@@ -34,21 +34,23 @@ const isTest = env === "test";
 
 // Base logger config
 const logger = pino({
-  level: isDev ? LOG_LEVEL || "info" : "error",
+  level: LOG_LEVEL || (isDev ? "debug" : "warn"),
   enabled: !isTest, // disable in test
-  transport: isDev
-    ? {
-        target: "pino-pretty",
-        options: { colorize: true, translateTime: "yyyy-mm-dd HH:MM:ss" },
-      }
-    : undefined,
+  // transport: isDev
+  //   ? {
+  //       target: "pino-pretty",
+  //       options: { colorize: true, translateTime: "yyyy-mm-dd HH:MM:ss" },
+  //     }
+  //   : undefined,
+  transport: undefined,
   // Remove unnecessary fields in prod
   base: isDev
     ? undefined // keep pid, hostname in dev if you want
     : {},       // empty object removes pid, hostname, etc.
-  timestamp: isDev
-    ? pino.stdTimeFunctions.isoTime // keep readable time in dev
-    : false,                         // disable timestamp in prod
+  // timestamp: isDev
+  //   ? pino.stdTimeFunctions.isoTime // keep readable time in dev
+  //   : false,                         // disable timestamp in prod
+  timestamp: false,  
   formatters: {
     level(label) {
       return { level: label }; // replace numeric level with string

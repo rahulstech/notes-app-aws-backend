@@ -1,5 +1,5 @@
 import Joi = require("joi");
-import { validate } from "./validator";
+import { validate, ValidationRule } from "./validator";
 import { APP_ERROR_CODE, AppError, newAppErrorBuilder, toErrorReason } from "./apperror";
 
 
@@ -8,8 +8,8 @@ const COMMON_RULES = {
     LOG_LEVEL: Joi.string().valid('debug','info','warn','error','fatal').default('info'),
 
     // AWS
-    AWS_ACCESS_KEY_ID: Joi.string().required(),
-    AWS_SECRET_ACCESS_KEY: Joi.string().required(),
+    AWS_ID: Joi.string().required(),
+    AWS_SECRET: Joi.string().required(),
 
     // S3
     S3_REGION: Joi.string().required(),
@@ -40,7 +40,7 @@ const COMMON_RULES = {
     MAX_ALLOWED_MEDIAS_SIZE_BYTES: Joi.number().default(10485760), // 10mb
 };
 
-const DEV_ENV_RULES = {
+const DEV_ENV_RULES = Joi.object({
     ...COMMON_RULES,
 
     // General
@@ -49,20 +49,20 @@ const DEV_ENV_RULES = {
 
     // DynamoDB
     DYNAMODB_LOCAL_ENDPOINT_URL: Joi.string().uri(),
-};
+});
 
-const PROD_ENV_RULES = {
+const PROD_ENV_RULES = Joi.object({
     ...COMMON_RULES,
 
     // DynamoDB
     DYNAMODB_REGION: Joi.string(),
-};
+});
 
 let processed: boolean = false;
 
 export function configenv(): Record<string,any> {
     if (!processed) {
-        let rules: Record<string,Joi.Schema> | undefined;
+        let rules: ValidationRule | undefined;
         switch(process.env.NODE_ENV) {
             case "prod": rules = PROD_ENV_RULES;
             break;

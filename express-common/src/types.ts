@@ -16,11 +16,12 @@ export interface ApiGatewayRequest extends Request {
 
 export interface UserClaim {
     userId: string;
+    isGuest: boolean;
 }
 
-export type ApiGatewayUserClaimExtractor = (req: Request)=>UserClaim | null;
+export type UserClaimExtractor = (req: Request)=>UserClaim | null;
 
-export const DefaultUserClaimExtractor: ApiGatewayUserClaimExtractor = (req: Request): UserClaim | null => {
+export const ApiGatewayUserClaimExtractor: UserClaimExtractor = (req: Request): UserClaim | null => {
     const apiGateway = (req as ApiGatewayRequest).apiGateway;
     if (!apiGateway) {
         return null;
@@ -31,14 +32,15 @@ export const DefaultUserClaimExtractor: ApiGatewayUserClaimExtractor = (req: Req
     }
     return {
         userId: claims.sub,
-    }
+        isGuest: false,
+    };
 }
 
 export interface UserClaimExtractorProvider {
-    getApiGatewayUserClaimExtractor(): ApiGatewayUserClaimExtractor;
+    getUserClaimExtractor(): UserClaimExtractor;
 }
 
 export interface AuthenticatedApiGatewayRequest extends ApiGatewayRequest {
     userClaim: UserClaim;
-    userClaimExtractor: ApiGatewayUserClaimExtractor;
+    userClaimExtractor: UserClaimExtractor;
 }

@@ -1,22 +1,19 @@
 import { Express, NextFunction } from "express";
 import express from "express";
 import { authRouter } from "./router/AuthRouter";
-import { usersRouter } from "./router/AuthUserRouter";
+import { usersRouter } from "./router/UserRouter";
 import helmet from "helmet";
-import cors from "cors";
 import { expressErrorHandler, expressNotFoundHandler } from "@notes-app/express-common";
 import { AuthApiRequest, AuthAppConfig } from "./types";
 
 export function createAuthExpressApp(config: AuthAppConfig): Express {
     const authRepository = config.authRepositoryFactory.createAuthRepository();
-    const userClaimExtractor = config.userClaimExtractorProvider.getApiGatewayUserClaimExtractor();
+    const userClaimExtractor = config.userClaimExtractorProvider.getUserClaimExtractor();
     const app: Express = express();
 
     // install middlewares
 
     app.use(helmet());
-
-    app.use(cors());
 
     app.use(express.json());
 
@@ -30,7 +27,7 @@ export function createAuthExpressApp(config: AuthAppConfig): Express {
 
     app.use('/auth', authRouter);
 
-    app.use('/auth/user', usersRouter);
+    app.use('/user', usersRouter);
 
     // error handlers 
 

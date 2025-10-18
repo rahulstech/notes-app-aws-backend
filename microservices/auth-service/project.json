@@ -12,9 +12,7 @@
         "platform": "node",
         "outputPath": "dist/microservices/auth-service",
         "format": ["cjs"], 
-        "tsConfig": "microservices/auth-service/tsconfig.app.json",
-        "assets": ["microservices/auth-service/src/assets"],
-        "generatePackageJson": true,
+        "generatePackageJson": false,
         "esbuildOptions": {
           "sourcemap": true,
           "outExtension": {
@@ -24,13 +22,15 @@
       },
       "configurations": {
         "development": {
-          "bundle": false,
-          "main": "microservices/auth-service/src/main.ts"
+          "bundle": true,
+          "main": "microservices/auth-service/dev-src/main.ts",
+          "tsConfig": "microservices/auth-service/tsconfig.dev.json"
         },
         "production": {
           "bundle": true,
           "minify": true,
           "main": "microservices/auth-service/src/index.ts",
+          "tsConfig": "microservices/auth-service/tsconfig.app.json",
           "esbuildOptions": {
             "sourcemap": false,
             "outExtension": {

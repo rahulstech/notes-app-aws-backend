@@ -11,14 +11,16 @@
       "defaultConfiguration": "development",
       "options": {
         "platform": "node",
-        "outputPath": "dist/microservices/note-service",
+        "target": "node22",
         "format": ["cjs"],
-        "bundle": false,
-        "tsConfig": "microservices/note-service/tsconfig.app.json",
-        "assets": ["microservices/note-service/src/assets"],
-        "generatePackageJson": true,
+        "bundle": true,
+        "minify": false,
+        "generatePackageJson": false,
+        "sourcemap": false,
         "esbuildOptions": {
-          "sourcemap": true,
+          "external": ["aws-sdk"],
+          "packages": "bundle",
+          "keepNames": true,
           "outExtension": {
             ".js": ".js"
           }
@@ -26,14 +28,36 @@
       },
       "configurations": {
         "development": {
-          "main": "microservices/note-service/src/main.ts"
+          "tsConfig": "microservices/note-service/tsconfig.dev.json",
+          "main": "microservices/note-service/dev-src/main.ts",
+          "outputPath": "dist/microservices/note-service/development"
         },
         "production": {
           "bundle": true,
           "minify": true,
-          "external": ["aws-sdk"],
+          "tsConfig": "microservices/note-service/tsconfig.app.json",
           "main": "microservices/note-service/src/index.ts",
+          "outputPath": "dist/microservices/note-service/production",
           "esbuildOptions": {
+            "external": ["aws-sdk"],
+            "packages": "bundle",
+            "keepNames": true,
+            "sourcemap": false,
+            "outExtension": {
+              ".js": ".js"
+            }
+          }
+        },
+        "playground": {
+          "bundle": true,
+          "minify": false,
+          "tsConfig": "microservices/note-service/tsconfig.playground.json",
+          "main": "microservices/note-service/playground-src/index.ts",
+          "outputPath": "dist/microservices/note-service/playground",
+          "esbuildOptions": {
+            "external": ["aws-sdk"],
+            "packages": "bundle",
+            "keepNames": true,
             "sourcemap": false,
             "outExtension": {
               ".js": ".js"

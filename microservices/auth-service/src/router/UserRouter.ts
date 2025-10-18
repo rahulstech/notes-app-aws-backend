@@ -2,7 +2,7 @@ import { catchError, extractUserClaim, validateRequest } from "@notes-app/expres
 import { NextFunction, Response, Router } from "express";
 import { APP_ERROR_CODE, newAppErrorBuilder } from "@notes-app/common";
 import { VerificationType } from "@notes-app/auth-repository";
-import { ChangeEmailRules, ChangeEmailVerifyRules, ResetPasswordRules, ResetPasswordVerifyRules, UpdateUserProfileRules, UserPhotUploadUrlRules } from "./AuthVertificationRules";
+import { ChangeEmailRules, ChangeEmailVerifyRules, ResetPasswordRules, UpdateUserProfileRules, UserPhotUploadUrlRules } from "./AuthVertificationRules";
 import { AuthApiRequest } from "../types";
 
 const usersRouter = Router();
@@ -12,15 +12,22 @@ const usersRouter = Router();
 usersRouter.use((req: AuthApiRequest,_,next: NextFunction) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
     if (!authHeader || typeof authHeader !== "string") {
-        const prefix = (authHeader as string).slice(0,6).toLowerCase();
-        if (prefix !== 'bearer') {
-            next(newAppErrorBuilder()
-                .setHttpCode(401)
-                .setCode(APP_ERROR_CODE.UNAUTHORIZED)
-                .addDetails('no authrization bearer header found')
-                .build());
-            return;
-        }
+        next(newAppErrorBuilder()
+            .setHttpCode(401)
+            .setCode(APP_ERROR_CODE.UNAUTHORIZED)
+            .addDetails("invalid authorization header")
+            .build());
+        return;
+    }
+
+    const prefix = (authHeader as string).slice(0,6).toLowerCase();
+    if (prefix !== 'bearer') {
+        next(newAppErrorBuilder()
+            .setHttpCode(401)
+            .setCode(APP_ERROR_CODE.UNAUTHORIZED)
+            .addDetails("no authrization bearer header found")
+            .build());
+        return;
     }
   
     const token = (authHeader as string).slice(7); // remove "Bearer "

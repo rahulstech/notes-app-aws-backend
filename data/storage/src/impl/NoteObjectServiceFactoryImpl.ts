@@ -6,8 +6,8 @@ import { S3Client } from "@aws-sdk/client-s3";
 
 const {
     NODE_ENV,
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
+    AWS_ID,
+    AWS_SECRET,
     S3_REGION,
     S3_BUCKET,
     S3_LOCAL_ENDPOINT_URL,
@@ -39,8 +39,8 @@ export class NoteObjectServiceFactoryImpl implements NoteObjectServiceFactory {
       const client = new S3Client({
         region: S3_REGION,
         credentials: {
-          accessKeyId: AWS_ACCESS_KEY_ID,
-          secretAccessKey: AWS_SECRET_ACCESS_KEY
+          accessKeyId: AWS_ID,
+          secretAccessKey: AWS_SECRET
         }
       });
 

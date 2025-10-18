@@ -258,6 +258,7 @@ export class AuthRepositoryImpl implements AuthRepository {
                 mime_type: input.type,
                 size: input.size,
                 expires_in: USER_PHOTO_UPLOAD_URL_EXPIRES_IN,
+                accessType: 'Rare'
             });
             return {
                 key,
