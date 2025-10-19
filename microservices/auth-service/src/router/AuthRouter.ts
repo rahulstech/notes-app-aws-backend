@@ -79,6 +79,7 @@ authRouter.post('/refresh',
         const { body } = req.validValue;
         const tokens = await req.authRepository.updateTokens({
             refreshToken: body.refreshToken,
+            email: body.email,
         });
         res.json(tokens);
     })

@@ -36,6 +36,7 @@ export const LogInRules = {
 export const RefreshRules = {
     body: Joi.object().keys({
         refreshToken: Joi.string().required(),
+        email: Joi.string().email().required(),
     })
     .required(),
 }

@@ -19,9 +19,13 @@
     "build:queue-service": "nx run queue-service:build:production --skip-nx-cache",
     "build:playground": "nx run note-service:build:playground --skip-nx-cache",
     "publish": "./scripts/prod/publish.sh",
+    "publish:auth-service": "./scripts/prod/publish.sh auth-service",
+    "publish:playground": "./scripts/prod/publish.sh playground",
     "deploy": "./scripts/prod/deploy.sh .env-PROD.json",
-    "deploy:playground": "./scripts/prod/deploy.sh .env-PROD.json playground",
-    "deploy:note-service": "./scripts/prod/deploy.sh .env-PROD.json note-service"
+    "deploy:auth-service": "./scripts/prod/deploy.sh .env-PROD.json auth-service",
+    "deploy:note-service": "./scripts/prod/deploy.sh .env-PROD.json note-service",
+    "deploy:playground": "./scripts/prod/deploy.sh .env-PROD.json playground"
+    
   },
   "repository": {
     "type": "git",

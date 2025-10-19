@@ -107,7 +107,10 @@ export interface UpdateProfilePhotoInput {
     key: string;
 }
 
-export type UpdateTokenInput = IssueTokenInput;
+export interface UpdateTokenInput {
+    refreshToken: string;
+    email: string;
+}
 
 export type UpdateTokenOutput = IssueTokenOutput;
 

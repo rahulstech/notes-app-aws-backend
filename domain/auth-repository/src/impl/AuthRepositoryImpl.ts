@@ -405,7 +405,8 @@ export class AuthRepositoryImpl implements AuthRepository {
         LOGGER.logDebug("update token", { tag: LOG_TAG, method: "updateToken", input });
         try {
             return await this.authService.issueToken({ 
-                refreshToken: input.refreshToken
+                refreshToken: input.refreshToken,
+                username: input.email,
             });
         }
         catch(error) {

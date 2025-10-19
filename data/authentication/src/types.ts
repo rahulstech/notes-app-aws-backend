@@ -125,6 +125,7 @@ export interface UpdateUserInput extends Partial<AuthenticatedInput> {
 // Issue Token
 export interface IssueTokenInput {
     refreshToken: string;
+    username: string;
 }
 
 export interface IssueTokenOutput extends TokenOutput {}

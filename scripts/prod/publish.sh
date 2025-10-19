@@ -30,32 +30,53 @@ generateDeployBundle() {
     zip -r "$PUBLISH_OUTPUT_DIR/$PROJECT_NAME-lambda.zip" . > /dev/null 2>&1
 }
 
-echo "Creating minimum node modules"
+generateMimimumNodeModules() {
+    echo "Creating minimum node modules"
+    if [ ! -e "$DIST_DIR" ]; then
+        mkdir "$DIST_DIR"
+    fi
 
-if [ ! -e "$DIST_DIR" ]; then
-    mkdir "$DIST_DIR"
-fi
+    if [ -e "$EXTERNAL_MODULES_DIR" ]; then
+        rm -r "$EXTERNAL_MODULES_DIR"
+    fi
 
-if [ -e "$EXTERNAL_MODULES_DIR" ]; then
-    rm -r "$EXTERNAL_MODULES_DIR"
-fi
-
-mkdir "$EXTERNAL_MODULES_DIR"
-
-cp "$ROOT_DIR/package.json" "$EXTERNAL_MODULES_DIR/package.json"
-cp "$ROOT_DIR/package-lock.json" "$EXTERNAL_MODULES_DIR/package-lock.json"
-cd "$EXTERNAL_MODULES_DIR"
-npm ci --omit=dev > /dev/null 2>&1
+    mkdir "$EXTERNAL_MODULES_DIR"
+    cp "$ROOT_DIR/package.json" "$EXTERNAL_MODULES_DIR/package.json"
+    cp "$ROOT_DIR/package-lock.json" "$EXTERNAL_MODULES_DIR/package-lock.json"
+    cd "$EXTERNAL_MODULES_DIR"
+    npm ci --omit=dev > /dev/null 2>&1
+}
 
 if [ ! -e "$PUBLISH_OUTPUT_DIR" ]; then
     mkdir "$PUBLISH_OUTPUT_DIR"    
 fi
 
-for project in ${PROJECTS[@]}
-do
-cd $ROOT_DIR
-buildProject $project
-generateDeployBundle $project
-done
+if [ -e "$DIST_DIR" ]; then
+    rm -r "$DIST_DIR"
+fi
+
+if [ ! -z "$1" ]; then
+    for project in ${PROJECTS[@]}
+    do
+        if [ "$project" == "$1" ]; then
+            buildProject $project
+            generateMimimumNodeModules
+            generateDeployBundle $project
+            break
+        fi
+    done
+else
+    for project in ${PROJECTS[@]}
+    do
+    buildProject $project
+    done
+
+    generateMimimumNodeModules
+
+    for project in ${PROJECTS[@]}
+    do
+    generateDeployBundle $project
+    done
+fi
 
 echo "Done"

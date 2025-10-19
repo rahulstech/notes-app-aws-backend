@@ -19,7 +19,6 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { AuthService } from "../AuthService";
 import {
-    VerifyChangePasswordInput,
     VerifyChangeUsernameInput,
     ResendUsernameVerificationCodeInput,
     ResendUsernameVerificationCodeOutput,
@@ -31,8 +30,6 @@ import {
     ChangeUsernameInput,
     ChangeUsernameOutput,
     VerifyForgotPasswordInput,
-    ResendChangePasswordVerificationCodeInput,
-    ResendChangePasswordVerificationCodeOutput,
     VerifySignUpInput,
     SignUpOutput,
     SignUpInput,
@@ -47,6 +44,7 @@ import {
 } from "../types";
 import { AUTH_SERVICE_ERROR_CODE, convertCognitoError } from "../errors";
 import { APP_ERROR_CODE, LOGGER, newAppErrorBuilder } from "@notes-app/common";
+import { createHmac } from "node:crypto";
 
 const LOG_TAG = "CognitoAuthServiceImpl";
 
@@ -54,17 +52,20 @@ export interface CognitoAuthServiceConfig {
     accessKeyId: string;
     secretAccessKey: string;
     region: string;
-    clientId: string;
     userPoolId: string;
+    clientId: string;
+    clientSecret: string;
 }
 
 export class CognitoAuthServiceImpl implements AuthService {
-    private clientId: string;
-    private userPoolId: string;
-    private client: CognitoIdentityProviderClient;
+    private readonly clientId: string;
+    private readonly clientSecret: string;
+    private readonly userPoolId: string;
+    private readonly client: CognitoIdentityProviderClient;
 
     constructor(config: CognitoAuthServiceConfig) {
         this.clientId = config.clientId;
+        this.clientSecret = config.clientSecret;
         this.userPoolId = config.userPoolId;
         this.client = new CognitoIdentityProviderClient({
             region: config.region,
@@ -85,12 +86,13 @@ export class CognitoAuthServiceImpl implements AuthService {
             { Name: "name", Value: input.fullname },
         ];
         try {
-            const { UserSub, UserConfirmed, CodeDeliveryDetails } = await this.client.send(
+            const { UserSub, UserConfirmed } = await this.client.send(
                 new SignUpCommand({
                     ClientId: this.clientId,
                     Username: input.username,
                     Password: input.password,
                     UserAttributes,
+                    SecretHash: this.generateSecretHash(input.username),
                 })
             );
             return {
@@ -99,7 +101,9 @@ export class CognitoAuthServiceImpl implements AuthService {
                 email: input.email,
                 fullname: input.fullname,
                 userConfirmed: UserConfirmed!,
-                codeDeliveryEmail: CodeDeliveryDetails!.Destination,
+                // enable "Attribute Verification and user account confirmnation" in cognito user pool
+                // otherwise no signup code will be sent
+                codeDeliveryEmail: input.email, 
             };
         } catch (error) {
             throw convertCognitoError(error);
@@ -112,6 +116,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                 new ResendConfirmationCodeCommand({
                     ClientId: this.clientId,
                     Username: input.username,
+                    SecretHash: this.generateSecretHash(input.username),
                 })
             );
             return { 
@@ -141,6 +146,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                     ClientId: this.clientId,
                     Username: input.username,
                     ConfirmationCode: input.code,
+                    SecretHash: this.generateSecretHash(input.username),
                 })
             );
         } catch (error) {
@@ -161,6 +167,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                     AuthParameters: {
                         USERNAME: input.username,
                         PASSWORD: input.password,
+                        SECRET_HASH: this.generateSecretHash(input.username),
                     },
                 })
             );
@@ -254,6 +261,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                 new ForgotPasswordCommand({
                     ClientId: this.clientId,
                     Username: input.username,
+                    SecretHash: this.generateSecretHash(input.username),
                 })
             );
             return { 
@@ -273,6 +281,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                     Username: input.username,
                     ConfirmationCode: input.code,
                     Password: input.newPassword,
+                    SecretHash: this.generateSecretHash(input.username),
                 })
             );
         }
@@ -362,7 +371,7 @@ export class CognitoAuthServiceImpl implements AuthService {
             UserAttributes.push({ Name: "picture", Value: picture });
         }
         if (UserAttributes.length === 0) {
-            LOGGER.logWarn('no attribute to update', { tag: LOG_TAG, method: 'updateUser'});
+            LOGGER.logInfo('no attribute to update', { tag: LOG_TAG, method: 'updateUser'});
             return;
         }
 
@@ -415,6 +424,7 @@ export class CognitoAuthServiceImpl implements AuthService {
                     ClientId: this.clientId,
                     AuthParameters: {
                         REFRESH_TOKEN: input.refreshToken,
+                        SECRET_HASH: this.generateSecretHash(input.username),
                     },
                 })
             );
@@ -448,5 +458,11 @@ export class CognitoAuthServiceImpl implements AuthService {
 
     private calculateExpiresAt(expiresIn: number): number {
         return Math.floor(Date.now() / 1000) + expiresIn;
+    }
+
+    private generateSecretHash(username: string): string {
+        return createHmac('SHA256', this.clientSecret)
+                .update(username + this.clientId)
+                .digest('base64');
     }
 }

@@ -36,10 +36,10 @@ interface ErrorResponse {
 
 export function expressNotFoundHandler(): RequestHandler {
   return (req: Request, res: Response) => {
-    const { path } = req;
+    const { path, method } = req;
     res.status(404).send({ 
       code: APP_ERROR_CODE.NOT_FOUND,
-      details: `${path} not found`,
+      details: `${method.toUpperCase()} ${path} not found`,
       retriable: false,
      });
   };

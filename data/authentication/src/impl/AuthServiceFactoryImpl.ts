@@ -7,8 +7,9 @@ const {
     AWS_ID,
     AWS_SECRET,
     COGNITO_REGION,
-    COGNITO_CLIENT_ID,
     COGNITO_USER_POOL_ID,
+    COGNITO_CLIENT_ID,
+    COGNITO_CLIENT_SECRET,
 } = configenv();
 
 export class AuthServiceFactoryImpl implements AuthServiceFactory {
@@ -20,8 +21,9 @@ export class AuthServiceFactoryImpl implements AuthServiceFactory {
             accessKeyId: AWS_ID,
             secretAccessKey: AWS_SECRET,
             region: COGNITO_REGION,
-            clientId: COGNITO_CLIENT_ID,
             userPoolId: COGNITO_USER_POOL_ID,
+            clientId: COGNITO_CLIENT_ID,
+            clientSecret: COGNITO_CLIENT_SECRET,
         })
     }
 }

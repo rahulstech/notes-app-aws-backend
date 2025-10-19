@@ -27,6 +27,7 @@ const COMMON_RULES = {
     // Cognito
     COGNITO_REGION: Joi.string().required(),
     COGNITO_CLIENT_ID: Joi.string().required(),
+    COGNITO_CLIENT_SECRET: Joi.string().required(),
     COGNITO_USER_POOL_ID: Joi.string().required(),
 
     // Limits
