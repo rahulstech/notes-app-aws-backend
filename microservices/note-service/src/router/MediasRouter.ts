@@ -30,7 +30,7 @@ router.route('')
       });
     }
     else {
-      res.sendStatus(200);
+      res.sendStatus(204);
     }
   }));
 

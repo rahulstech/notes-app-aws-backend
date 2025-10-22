@@ -25,7 +25,7 @@ authRouter.put('/register/verify',
             code: body.code,
             email: body.email,
         });
-        res.sendStatus(200);
+        res.sendStatus(204);
     }));
 
 authRouter.get('/register/verify/code', 
@@ -59,7 +59,7 @@ authRouter.post('/password/verify',
             email: body.email,
             newPassword: body.newPassword,
         });
-        res.sendStatus(200);
+        res.sendStatus(204);
     }));
 
 authRouter.post('/login', 

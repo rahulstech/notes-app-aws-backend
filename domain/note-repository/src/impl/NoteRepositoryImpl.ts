@@ -205,7 +205,8 @@ export class NoteRepositoryImpl implements NoteRepository {
         .filter(SK => !unsuccessfulSet.has(SK))
         .map(SK => createNoteMediaKey({ user_id: PK, note_id: SK }));
 
-      this.enqueuDeleteNotesMessage(prefix);
+      // NOTE: without awit lambda may exit before sending the message
+      await this.enqueuDeleteNotesMessage(prefix);
 
       return { unsuccessful };
     }
@@ -418,7 +419,8 @@ export class NoteRepositoryImpl implements NoteRepository {
       });
 
       // enqueue a message to delete the media objects
-      this.enqueuDeleteMediasMessage(allKeys);
+      // NOTE: the await is important here, otherwise lambda will exit before the message is sent
+      await this.enqueuDeleteMediasMessage(allKeys);
 
       return {
         unsuccessful: allUnsuccessful.length > 0 ? allUnsuccessful : undefined,

@@ -1,261 +1,157 @@
-## Notes App AWS Backend
+# 🚀 Notes App AWS Backend
 
-A **serverless microservice-based backend** built using **AWS Lambda**, **DynamoDB**, **S3**, and **SQS**, managed under an **Nx Monorepo**.  
-This backend powers a **Notes App** where users can securely create, update, and sync their notes and media between devices.
+A **serverless microservice-based backend** built using **AWS Lambda**, **DynamoDB**, **S3**, and **SQS**, all managed within an **Nx Monorepo**. This backend powers a modern **Notes App**, ensuring users can securely create, sync, and manage their notes and associated media across devices.
 
-## Content
+-----
 
-* [Project Overview](#project-overview)
-* [Tech Stack](#tech-stack)
-* [Aws Configuration](#aws-configuration)
-* [Install Guide](#install-guide)
-* [Publish Guide](#publish-guide)
-* [Learning Outcome](#learning-outcome)
-* [Future Work](#future-work)
-* [Contact](#contact)
+## 📜 Content
 
-## Project Overview
+  * [Project Overview](#-project-overview)
+  * [Architecture Summary](#️-architecture-summary)
+  * [Tech Stack](#️-tech-stackk)
+  * [Configuration & Setup](#configuration--setup)
+      * [AWS Configuration Guide](#aws-configuration-guide)
+      * [Installation & Local Dev](#installation--local-dev)
+      * [Publish & Deploy](#publish--deploy)
+  * [Deep Dive: Learning Outcomes](#-deep-dive-learning-outcomes)
+  * [Future Work](#-future-work)
+  * [Contact](#️-contact)
 
-The **Notes App** backend provides APIs to manage user notes and media with authentication and data synchronization support.  
-It is designed to work as a **sync service** for an **Android offline-first client**, ensuring users’ notes remain safe and recoverable across devices.
+-----
 
-**Core Features:**
+## 💡 Project Overview
 
-* **User Authentication** — users must log in to use the service (handled via AWS Cognito)
-* **Note Management**
-  * Add, edit, or delete notes with title and text content
-  * List all notes or fetch a specific note by its ID
-* **Media Support**
-  * Attach up to **5 images per note**
-  * Uploads handled via **AWS S3**
-  * Deletion handled asynchronously using **AWS SQS** (decoupled cleanup)
-* **Sync Support**
-  * Android client syncs local changes (create/update/delete) with this backend
-  * Enables restoring notes after re-login or device change
+The **Notes App** backend provides secure, scalable APIs to manage user notes and media, focusing heavily on **authentication** and **data synchronization**. It is specifically designed to function as a robust **sync service** for an **Android offline-first client**, guaranteeing user data is safe, consistent, and fully recoverable.
 
-This project focuses heavily on **clean service design** and **AWS-native architecture** principles.
+### Core Features
 
-**Microservices:**
-* `auth-service` — handles user authentication and token validation
-* `note-service` — manages CRUD operations for notes
-* `queue-service` — listens to SQS events and performs background tasks (e.g., deleting media files)
+  * **User Authentication:** Secure access control handled by **AWS Cognito**.
+  * **Note Management:** Complete CRUD (Create, Read, Update, Delete) support for notes (title and text content).
+  * **Media Support:**
+      * Allows up to **5 images per note**.
+      * Secure media uploads managed via **AWS S3**.
+      * Media cleanup (deletion) is handled **asynchronously** using **AWS SQS** to decouple the user request from slow cleanup tasks.
+  * **Sync Logic:** Supports complex synchronization flows (create, update, delete) to maintain data consistency between the client's local database and the backend.
 
-[Back to content](#content)
+### Microservices
 
-## Tech Stack
+The repository is structured around a clean separation of concerns, utilizing three core microservices:
 
-The tech stack i used for this project is as below:
+| Service | Primary Responsibility | Backing Technology |
+| :--- | :--- | :--- |
+| `auth-service` | User sign-up, sign-in, and token validation. | **Cognito**, **API Gateway** |
+| `note-service` | Notes CRUD operations. | **DynamoDB**, **API Gateway** |
+| `queue-service` | Listens to SQS and performs background/asynchronous tasks (e.g., media file cleanup). | **SQS** |
 
-- Language: TypeScript (Node.js 22)
-- Framework: Nx Monorepo
-- Cloud: AWS (Lambda, DynamoDB, S3, SQS, CloudFront, API Gateway, Cognito)
-- Testing: Jest, LocalStack
-- Infrastructure Scripts: Bash
+[Back to content](#-content)
 
-[Back to content](#content)
+## 🏗️ Architecture Summary
 
-## Aws Configuration
+This section details the serverless architecture and the interaction between core AWS services.
 
-The backend is deployed entirely on **AWS** using a **serverless architecture** built around **Lambda**, **API Gateway**, **S3**, **SQS**, **DynamoDB**, and **CloudFront**.
-This section summarizes how the production infrastructure is configured and how different components interact.
+### Service Interactions
 
-**1. API Gateway**
+```mermaid
+graph TD
+    A[Client: Android App / Playground] --> B(API Gateway: notes-app-rest-api);
+    B --> C(Lambda: auth-service);
+    B --> D(Lambda: note-service);
+    C --> E(Cognito User Pool);
+    D --> F(DynamoDB: notes-app-user-notes);
+    D --> G(S3: notes-app-media-store);
+    G -- Object PUT/DELETE Event --> H(SQS: notes-app-queue);
+    H --> I(Lambda: queue-service);
+    I --> G;
+    I --> F;
+    G --> J(CloudFront CDN);
+    A --> J;
 
-* Acts as the **entry point** for all client requests.
-* Routes incoming HTTP requests to the corresponding **Lambda functions** (e.g., `auth-service`, `note-service`).
-* Integrated with **Cognito Authorizer** for validating access tokens.
-* Each microservice has its own route prefix for better separation and scalability.
-
-Example:
-
-```
-/auth/...       → Auth Lambda
-/auth/user/...  → Auth Lambda
-/notes/...      → Notes Lambda
-```
-
-**2. AWS Lambda Functions**
-
-* Each microservice (`auth-service`, `note-service`, `queue-service`) runs as a **dedicated Lambda function**.
-* All Lambdas are built with **Node.js 22 runtime**.
-* Each Lambda function reads its configuration from environment variables defined in `.env-PROD`.
-* The Lambdas interact with DynamoDB, S3, and SQS using the AWS SDK v3.
-
-**Lambda Roles & Permissions**
-
-* Each Lambda is assigned a **dedicated IAM role** with least-privilege permissions to:
-
-  * Read/write DynamoDB tables
-  * Access S3 for media operations
-  * Read messages from SQS (for background tasks)
-  * Authenticate requests through Cognito
-
-**3. AWS Cognito (Authentication)**
-
-* Authentication is handled by the **`auth-service` Lambda**, which uses **AWS Cognito** internally.
-* Cognito manages:
-
-  * User registration and login
-  * Token issuance (Access and Refresh tokens)
-  * Password recovery and validation
-* API Gateway integrates directly with **Cognito Authorizer** to protect all user endpoints.
-
-**4. DynamoDB (Data Storage)**
-
-* Stores all user notes and related metadata.
-* Table design optimized for **user-based access patterns**:
-
-  * **Partition Key:** `user_id`
-  * **Sort Key:** `note_id`
-* Supports efficient querying of all notes for a given user or retrieving a single note by ID.
-* Used for both structured data (notes) and operational metadata (sync state, timestamps, etc.).
-
-**5. S3 and CloudFront (Media Storage)**
-
-* **S3** is used to store media (note images).
-* Buckets are **not publicly accessible** to maintain privacy and control.
-* **CloudFront** is configured in front of S3 to provide secure, CDN-optimized delivery.
-* Only pre-signed URLs are used for upload and download operations.
-
-**6. SQS (Asynchronous Processing)**
-
-* **S3 PUT events** (file uploads) trigger **SQS messages**.
-* In production, **SQS triggers a dedicated Lambda** (`queue-service`) to process those messages.
-
-  * Example: When a note is deleted, `queue-service` removes related media files asynchronously.
-* SQS ensures decoupled and reliable background task processing, enabling retry mechanisms and fault tolerance.
-
-**7. IAM Setup**
-
-* A **dedicated IAM user** and related **roles/policies** are created for this project only.
-* The IAM user is granted access to:
-
-  * DynamoDB (CRUD for notes table)
-  * S3 (read/write for media bucket)
-  * SQS (read/write for message queues)
-  * Lambda (deploy and invoke)
-  * CloudFront (invalidate cache if required)
-  * API Gateway & Cognito (management and authorizer setup)
-
-This approach maintains **security isolation**, ensuring no cross-project access or permission overlap.
-
-
-**Architecture Summary:**
-
-```
-Client (Android App)
-        ↓
-   API Gateway
-        ↓
-  +-----------------------------+
-  |        Lambda Layer         |
-  |  - auth-service (Cognito)   |
-  |  - note-service (CRUD)      |
-  +-----------------------------+
-        ↓           ↓
-   DynamoDB       S3 + CloudFront
-        ↑           ↓
-        └─── S3 PUT → SQS → Lambda (media cleanup)
+    style C fill:#f9f,stroke:#333,stroke-width:2px;
+    style D fill:#f9f,stroke:#333,stroke-width:2px;
+    style I fill:#f9f,stroke:#333,stroke-width:2px;
+    style B fill:#ccf;
+    style J fill:#ddf;
 ```
 
-[Back to content](#content)
+### Playground
 
+A dedicated, unauthenticated **API playground** is available for public testing.
 
-[Back to content](#content)
+  * **[Try it now](https://rahulstech.github.io/notes-app-aws-backend)**
 
-## Install Guide
+> **⚠️ NOTE:** This playground is public. Please **do not share any sensitive information or media** here, as all notes and uploads are viewable by anyone.
 
-**Prerequisites**
+### AWS Configuration Guide
 
-You **must** have the following installed on your machine (tested on Linux):
+For a step-by-step walkthrough of the **production AWS infrastructure setup** (IAM, DynamoDB, SQS, Cognito, and API Gateway routes), please refer to the dedicated document:
 
-* **Docker** — for running LocalStack (local S3/DynamoDB/SQS during development and integration tests)
-* **AWS CLI** (v2 recommended)
-* **Node.js 22** — the project targets Node 22 and `npm`
-* **Linux OS** — bash scripts are written for Linux; run them on WSL2 or native Linux. macOS should also work but minor path differences may apply.
-* **git** — to clone the repository
+  * [**Complete Configurations Steps**](documents/AWSConfiguration.md)
 
+[Back to content](#-content)
 
-**Project environments**
+## 🛠️ Tech Stack
 
-The project supports **three environments**:
+| Category | Components | Details |
+| :--- | :--- | :--- |
+| **Language** | **TypeScript** | Node.js 22 runtime for clean, type-safe code. |
+| **Framework** | **Nx Monorepo** | Streamlined build, test, and dependency management across microservices. |
+| **Cloud** | **AWS** | Lambda, DynamoDB, S3, SQS, CloudFront, API Gateway, Cognito, Cloudwatch. |
+| **Testing** | **Jest**, **LocalStack** | Unit testing with Jest; Integration testing uses LocalStack to mock AWS services locally. |
+| **Tooling** | **Bash** | Scripting for setup, testing, and deployment workflows. |
 
-* `dev` — local development using LocalStack (local DynamoDB, S3, SQS)
-* `test` — integration testing using local containers (scripts under `scripts/test/integration`)
-* `prod` — deployment to a real AWS account
+[Back to content](#-content)
 
-**Repository layout (relevant paths)**
+## ⚙️ Installation & Local Dev
 
-* `scripts/dev/database-service.sh` — sets up local DynamoDB for development
-* `scripts/test/integration/` — contains integration test harness scripts (start containers, set env vars, run tests, cleanup)
-* `scripts/publish/` — publish/deploy helper scripts (see [Publish Guide](#publish-guide))
+### Prerequisites
 
+You **must** have the following installed to run the project locally (tested on Linux/WSL2):
 
-**Quick Install**
+  * **Node.js 22** and **npm**
+  * **Docker** (required for LocalStack/integration tests)
+  * **AWS CLI** (v2 recommended)
+  * **Linux OS / WSL2** (due to reliance on **Bash** scripts)
+  * **git**
 
-1. Clone the repository
+### Quick Setup
 
-```bash
-git clone https://github.com/rahulstech/notes-app-aws-backend.git notes-app-aws-backend
-cd notes-app-aws-backend
-````
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/rahulstech/notes-app-aws-backend.git notes-app-aws-backend
+    cd notes-app-aws-backend
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+3.  **Ensure prerequisites are met:**
+    ```bash
+    node -v && docker --version && aws --version
+    ```
 
-2. Ensure Node 22 and npm are active
+### Local Development (`dev` environment)
 
-```bash
-node -v   # should show v22.x.x
-npm -v
-```
+The `dev` environment relies on **LocalStack** to simulate DynamoDB locally. You must have **Cognito**, **S3**, and **SQS** set up in your actual `dev` AWS account for full functionality.
 
-3. Install dependencies
+1.  **Prepare Local DynamoDB:** This script starts LocalStack and provisions the `notes-app-user-notes` table.
+    ```bash
+    npm run exe:database
+    ```
+2.  **Configure Environment:** Rename `.env-DEV-example` to **`.env-DEV`** and populate with your `dev` AWS service endpoints and credentials.
+3.  **Start Microservices:** Run each service in its own terminal window.
+    ```bash
+    npm run dev:note-service
+    npm run dev:queue-service
+    npm run dev:auth-service
+    ```
 
-```bash
-npm install
-```
+> **Testing Note Service:** In the local `dev` environment, the `note-service` will use a mock **GUEST** user if it does not find an `Authorization` header. To test with an authorized user, pass the **accessToken** received from the `auth-service` in the `Authorization` header as a **Bearer Token** (`Bearer <access-token>`).
 
-4. Verify Docker and AWS CLI
+### Integration Tests (`test` environment)
 
-```bash
-docker --version
-aws --version
-```
+Integration tests use dedicated LocalStack containers for non-auth services (DynamoDB, S3, SQS) to guarantee reproducibility.
 
-**Local development (dev environment)**
-
-The `dev` environment uses LocalStack to emulate AWS services such as DynamoDB.
-Before running the backend locally, run the provided script to prepare the local database:
-
-```bash
-npm run exe:database
-```
-
-Typical *dev* flow:
-
-- Create S3 bucket
-- Setup CloudFront for the S3 bucket created in previous step
-- Create a **user-pool** and **client** in Aws Cognito
-- Create a standard Aws SQS queue
-- Create an IAM user and grant access to all of the above services
-- Rename `.env-DEV-example` to `.env-DEV` and add environment values.
-- Start the local dynamodb instance to provision DynamoDB tables and seed data.
-- Start the backend microservices:
-
-```bash
-npm run dev:note-service
-npm run dev:queue-service
-npm run dev:auth-service
-```
-
-**Note:** 
-- In _dev_ environment you can run `note-service` with or without `authorization` header. If this service does not find _authorization_ header then it uses _GUEST_ user. 
-- To test with authorized use just add the **accessToken** received on successful login from `auth-service` as _authorization_ header as **bearer** toke as `bearer <access-token>`
-
-**Integration tests (test environment)**
-
-Integration tests use LocalStack containers for S3, SQS, and DynamoDB.
-Integration tests exist for `@notes-app/database-service`, `@notes-app/storage-service`, and `@notes-app/queue-service`.
-
-Example:
+To run a service's integration test suite:
 
 ```bash
 npm run test:integration:database-service
@@ -265,194 +161,135 @@ npm run test:integration:storage-service
 npm run test:integration:queue-service
 ```
 
-What the test scripts do:
+> **Test Script Workflow:** These commands automatically spin up necessary LocalStack containers, configure environment variables, execute the Jest test suite, and clean up the containers afterward.
 
-* Spin up LocalStack containers for the required AWS services
-* Configure endpoints and environment variables
-* Run Jest integration tests
-* Clean up containers after test completion
+### Troubleshooting
 
-**Troubleshooting**
+  * **Script Permissions:** If a bash script (`*.sh`) fails, ensure it is executable: `chmod +x /path/to/script.sh`.
+  * **Docker Issues:** Verify your user has the correct permissions to run Docker commands without `sudo`.
 
-* If Docker permission issues occur, ensure the current user can run Docker commands without `sudo`.
-* If tests fail to connect to endpoints, verify endpoint URLs and port mappings in the integration scripts.
-* If any base script (_*.sh_) inside _scripts_ directory does not run properly, then ensure that the scipt is executable.
-  Make the script executable with the command `chmod +x /path/to/script.sh`
+[Back to content](#-content)
 
-**[Back to Content](#content)**
+## 📤 Publish & Deploy
 
-## Publish Guide
+The **publish process** prepares the microservices for deployment by packaging them into AWS Lambda-ready `.zip` files.
 
-The **publish process** prepares microservices for **production deployment** on AWS Lambda.
+### 1\. Publish (Build & Package)
 
-**Folder:** `scripts/publish/`
+The scripts in `scripts/publish/` build, package, and output the `.zip` file into a `publish/` folder.
 
-Each script inside this directory:
+| Action | Command |
+| :--- | :--- |
+| **All Services** | `npm run publish` |
+| Individual Service | `npm run publish:auth-service` |
+| Individual Service | `npm run publish:note-service` |
+| Individual Service | `npm run publish:queue-service` |
 
-1. **Builds** the respective microservice (using its Nx target configuration for production)
-2. **Packages** the build output into a `.zip` file
-3. **Outputs** the zip to a `publish/` folder — ready to upload to AWS Lambda
+### 2\. Deployment (Upload to AWS)
 
-Example:
+The `deploy.sh` script uploads the packaged `.zip` files and applies the production environment variables to the respective Lambda functions.
 
-```bash
-# Build and package all microservices
-npm run publish
-```
+  * **Environment Variables:** Before deploying, rename `.env-PROD.json-example` to **`.env-PROD.json`** and ensure your production values are correct.
 
-**Environment Setup (Production)**
+| Action | Command |
+| :--- | :--- |
+| **All Services** | `npm run deploy` |
+| Individual Service | `npm run deploy:auth-service` |
+| Individual Service | `npm run deploy:note-service` |
+| Individual Service | `npm run deploy:queue-service` |
 
-Each AWS Lambda function should have environment variables defined using `.env-PROD-example` as reference.
-Rename it to `.env-PROD`, fill in the correct production values, and ensure those variables are also added in each Lambda’s configuration on AWS.
+[Back to content](#-content)
 
-**Manual AWS setup (current phase):**
+## 🧠 Deep Dive: Learning Outcomes
 
-* **API Gateway** — acts as the entry point for API requests
-* **Cognito Authorizer** — used for authentication and securing endpoints
-* **Lambda Functions** — deploy built zip files from `publish-output/`
-* **DynamoDB**, **S3**, **SQS**, **CloudFront** — must be created and connected via proper IAM roles
+This project was a significant learning milestone, serving as my **first Nx monorepo** and my **first real-world TypeScript project**. It yielded deep insights into modern serverless architecture and professional software design.
 
-> Note: These configurations are currently performed manually.
-> Future updates will include scripts to automate Lambda uploads, environment setup, and API Gateway configuration.
+**TypeScript and Clean Design Mastery**
 
-**[Back to Content](#content)**
+I moved beyond basic JavaScript to write robust, maintainable, and type-safe code:
 
-## Learning Outcome
-
-This project was my **first Nx monorepo** implementation — and also my **first TypeScript project**.
-It gave me deep insights into how to structure, build, and maintain multiple backend services efficiently within a single workspace.
-
-**TypeScript (Language and Design Mastery)**
-
-This was my **first real-world TypeScript project**, and I learned how to leverage the language’s features to write robust, maintainable, and self-documented code.
-
-Key learnings:
-
-* Understanding and configuring the **TypeScript compiler (`tsconfig.json`)** — including reusing and extending base configurations for each microservice.
-* Using **interfaces**, **classes**, and **enums** to create structured, predictable, and type-safe code.
-* Practical usage of **TypeScript utility types** like:
-
-  * `Omit`, `Partial`, `Required`, `Pick`, and `Record`
-* Differentiating and correctly applying **special types** such as:
-
-  * `never`, `unknown`, and `any`
-* Applying **strict typing** in data models and service contracts for better IDE support and compile-time safety.
-
-I also implemented several **object-oriented design patterns** and **TypeScript best practices**, such as:
-
-* **Interface-based design** — defining abstract service contracts and then providing concrete implementations.
-* **Factory classes** — for instantiating AWS service clients and environment-specific handlers.
-* **SOLID principles** — ensuring that services are modular, testable, and maintainable.
+  * **Advanced Typing:** Mastered configuring the **TypeScript compiler (`tsconfig.json`)** and effectively used utility types like `Omit`, `Partial`, `Pick`, and `Record`.
+  * **Design Patterns:** Implemented **Interface-based design** for abstracting service contracts and used **Factory classes** for environment-specific client instantiation, adhering to **SOLID principles**.
+  * **Special Types:** Gained practical experience applying `never`, `unknown`, and `any` correctly to enhance compile-time safety.
 
 **Nx Monorepo Architecture**
 
-I learned how to:
+  * **Structure:** Learned to structure the workspace with multiple applications and shared libraries.
+  * **Automation:** Configured build, serve, and test targets for different environments, leveraging Nx executors to automate workflows efficiently.
+  * **Code Sharing:** Successfully reused shared TypeScript interfaces and utilities across decoupled microservices.
 
-* Structure an **Nx monorepo** with multiple applications and shared libraries.
-* Configure build and serve targets for different environments (`development`, `production`, `test`).
-* Reuse shared TypeScript types and utilities across microservices.
-* Automate testing and building workflows using Nx executors and scripts.
+**DynamoDB (NoSQL) Access Patterns**
 
-**Database (DynamoDB - NoSQL)**
+This was a first-time deep dive into a NoSQL database, shifting the focus from SQL's normalization to **access pattern-driven denormalization**.
 
-This was also my first experience with a **NoSQL database** — DynamoDB.
-I learned that while **normalization** is crucial in SQL, **denormalization** often provides better performance in NoSQL systems designed around access patterns.
+  * **Data Modeling:** Learned to define efficient key structures:
+      * **Partition Key (`user_id`):** Defines the logical grouping for user data.
+      * **Sort Key (`note_id`):** Defines individual items within a partition, enabling efficient lookups.
+  * **Indexing:** Successfully implemented **Local Secondary Index (LSI)** and **Global Secondary Index (GSI)** to support diverse query requirements, such as listing all notes by a user sorted by `timestamp_created`.
+  * **Performance:** Implemented **paged loading** to handle large datasets effectively, similar to SQL `LIMIT/OFFSET`.
 
-Key learnings:
+**Serverless Asynchronous Design**
 
-* Tables require only key attributes (no strict schema enforcement)
-* **Partition Key** defines the logical grouping
-* **Sort Key** defines individual items within a partition
-* Used **Global Secondary Index (GSI)** and **Local Secondary Index (LSI)** effectively
-* Implemented **paged loading** similar to SQL `LIMIT/OFFSET` for large dataset handling
-* Understood DynamoDB’s **query limitations** (must use keys or indexed attributes)
+The use of **AWS SQS** was key to achieving service decoupling, leading to faster user response times and higher reliability.
 
-Example model:
+  * **Decoupling Services:** When a note is deleted, the `note-service` pushes a lightweight **delete event** to SQS, instead of waiting for S3.
+  * **Asynchronous Cleanup:** The dedicated **`queue-service`** consumes this event asynchronously, performs the media file cleanup on S3, and handles automatic retries in case of service failures.
 
-> `user_id` → Partition Key
-> `note_id` → Sort Key
+**API Gateway and Lambda Proxy**
 
-This made it easy to query all notes by a user or a specific note efficiently.
+  * **Efficient Routing:** Learned the power of the **Lambda Proxy Handler** using the **`{proxy+}`** route pattern (e.g., `/auth/{proxy+}`). This funnels all sub-routes to a single Lambda, making the internal Express server responsible for routing, which drastically simplifies API Gateway configuration.
+  * **Security Offload:** Learned to set up **Cognito as a JWT Authorizer** directly on API Gateway routes. This offloads the heavy task of token validation to AWS, passing requests to the Lambda **only** if the token is valid, which is a huge advantage for performance and code simplicity.
 
-**Asynchronous Design (SQS)**
+**S3 Management**
 
-I implemented **asynchronous communication** using **AWS SQS** to decouple services.
+  * **Lifecycle Rules:** Understood how to use S3 Lifecycle to manage object storage (e.g., changing storage class or auto-deleting objects after a period).
+  * **Secure Access:** Implemented **CloudFront CDN** as the public-facing layer, securely distributing media objects while restricting direct public access to the underlying S3 bucket.
 
-Example use case:
-When a note is deleted, the related media files must also be deleted.
-Instead of blocking the user request, a **delete event** is pushed to an SQS queue.
-The `queue-service` listens for these events and performs the cleanup asynchronously.
 
-This design pattern:
+**IAM Roles And Resource Policy**
 
-* Improves response times
-* Reduces service coupling
-* Increases scalability and reliability
-* Handles retries automatically in case of failures
-
+* **Mastered IAM Access Control Mechanisms:** Gained a thorough understanding of the distinction between **Identity-Based Policies** (e.g., IAM Roles and User Policies) and **Resource-Based Policies**.
+* **IAM Roles and Custom Policies:** **Hands-on experience** in implementing **IAM Roles**, creating **custom permission policies** (including deep knowledge of their JSON structure and components), and effectively attaching them to roles to define permissions for various AWS services and users.
+* **Policy Functionality:** Clearly understand how **IAM Roles** provide temporary credentials and how **Identity Policies** (both Role and User policies) specify what actions an identity can perform.
+* **Resource Policy Application:** Learned the function and structure of **Resource-Based Policies** to explicitly grant or deny access to a resource (like an S3 bucket or KMS key) for specified principals (users, roles, or other AWS accounts).
+* **IAM User Policy Context:** Identified that **IAM User Policies** function similarly to Role Policies, granting specific permissions directly to an individual IAM user. Acknowledged the existence of **Identity Policies** (a broader category including User and Role policies) and their place in the IAM framework.
 
 **Testing**
 
 I designed and executed both **unit** and **integration** tests using **Jest**.
 
 * **Unit tests** — focused on isolated modules using mocks.
+
 * **Integration tests** — validated real interactions with AWS services through **LocalStack**.
+
 * Learned Jest mocking strategies for AWS SDK calls and cross-service interactions.
+
 * Implemented automated test scripts for reproducible and containerized testing environments.
 
-**[Back to Content](#content)**
+[Back to content](#-content)
 
-## Future Work
+-----
 
-While the current version provides a strong and modular foundation, several enhancements are planned for upcoming iterations:
+## 🔮 Future Work
 
-1. **API Versioning**
+The foundation is strong, but the following enhancements are planned to evolve the application into a more robust platform:
 
-Currently, the backend supports a single API version.
-Future releases will introduce multiple API versioning (e.g., v1, v2) to ensure backward compatibility and smoother client upgrades.
+1.  **Deployment Automation:** Implement Infrastructure as Code (IaC) via **Serverless Framework** or **AWS CDK** to fully automate the configuration and deployment of Lambda, API Gateway, and Cognito resources.
+2.  **Rich Text Notes:** Upgrade note content storage to support rich text formatting (e.g., Markdown or HTML), improving the note-taking experience.
+3.  **Advanced Filtering:** Introduce more sophisticated querying capabilities beyond creation date, including filtering by **tags, categories**, and searching by **title or keyword**.
+4.  **Federated Authentication:** Integrate additional Identity Providers (Google, Facebook, etc.) into the Cognito User Pool.
+5.  **API Versioning:** Implement multiple API versions (e.g., `/v1/`, `/v2/`) to ensure long-term client compatibility and graceful feature rollouts.
 
-2. **Rich Text Notes**
+[Back to content](#-content)
 
-At present, note content is stored as plain text.
-Rich text formatting (bold, italic, bullet lists, etc.) will be supported to improve usability and enhance the note-taking experience.
+-----
 
-3. **Advanced Filtering and Sorting**
+## ✉️ Contact
 
-Notes are currently sorted in descending order of creation date.
-Future versions will support multiple filters and sorting options, such as:
+I'm keen to discuss this project, explore collaborative opportunities, or simply connect on backend and serverless development\!
 
-* By tag or category
+  * **[GitHub](https://github.com/rahulstech)**
+  * **[LinkedIn](https://www.linkedin.com/in/rahul-bagchi-176a63212/)**
+  * **Email:** `rahulstech18@gmail.com`
 
-* By last modified date
-
-* By title or keyword search
-
-4. **Federated Authentication**
-
-The authentication system currently uses AWS Cognito user pools.
-Future updates will add federated authentication, allowing users to log in with Google, Facebook, and other identity providers.
-
-5. **Deployment Automation**
-
-While the current setup requires manual steps to configure AWS Lambda, API Gateway, and Cognito,
-upcoming versions will include deployment automation scripts to:
-
-* Upload Lambda packages
-
-* Configure API Gateway routes
-
-* Setup Cognito authorizers
-
-* Sync environment variables from .env files automatically
-
-**[Back to Content](#content)**
-
-## Contact
-
-If you’d like to discuss this project, collaborate, or learn more about my work:
-
-- [**GitHub**](https://github.com/rahulstech)
-- [**LinkedIn**](https://www.linkedin.com/in/rahul-bagchi-176a63212/)
-- **Email** rahulstech18@gmail.com
-
-**[Back to Content](#content)**
+[Back to content](#-content)

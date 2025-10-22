@@ -20,7 +20,9 @@ buildProject() {
 generateDeployBundle() {
     PROJECT_NAME=$1
     if [ "$PROJECT_NAME" == "playground" ]; then
-        PROJECT_DIR="$MICROSERVICES_DIR/note-service/$PROJECT_NAME"
+        PROJECT_DIR="$MICROSERVICES_DIR/note-service/playground/"
+    elif [ "$PROJECT_NAME" == "note-service" ]; then
+        PROJECT_DIR="$MICROSERVICES_DIR/note-service/production/"
     else 
         PROJECT_DIR="$MICROSERVICES_DIR/$PROJECT_NAME"
     fi

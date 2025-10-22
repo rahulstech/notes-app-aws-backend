@@ -74,7 +74,7 @@ router
         PK: req.userClaim.userId,
         SKs
       });
-      res.sendStatus(200);
+      res.sendStatus(204);
     })
   );
 

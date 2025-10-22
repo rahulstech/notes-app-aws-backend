@@ -1,7 +1,7 @@
 import { NoteRepositoryFactoryImpl } from "@note-app/note-repository";
 import { createNoteExpressApp } from "./app";
 import { NoteExpressAppConfiguration } from "./types";
-import { configenv, installUnexpectedErrorHandlers, LOGGER } from "@notes-app/common";
+import { configenv, installUnexpectedErrorHandlers } from "@notes-app/common";
 import { NoteDataServiceFactoryImpl } from "@notes-app/database-service";
 import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
@@ -9,8 +9,6 @@ import serverless from "serverless-http";
 import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
 
 installUnexpectedErrorHandlers();
-
-configenv();
 
 // build the app configuration
 const config: NoteExpressAppConfiguration = {
@@ -27,6 +25,3 @@ const app = createNoteExpressApp(config);
 
 // wrap with serverless-http
 export const handler = serverless(app, {});
-
-// log init (cold start)
-LOGGER.logInfo("note-service initialized");

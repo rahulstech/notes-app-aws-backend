@@ -48,7 +48,7 @@ usersRouter.put('/password',
             newPassword: body.newPassword,
             accessToken: req.accessToken,
         })
-        res.sendStatus(200);
+        res.sendStatus(204);
     }));
     
 usersRouter.put('/email',
@@ -71,7 +71,7 @@ usersRouter.post('/email/verify',
             code: body.code,
             accessToken: req.accessToken,
         });
-        res.sendStatus(200);
+        res.sendStatus(204);
     }));
 
 usersRouter.route('/')
@@ -96,7 +96,7 @@ usersRouter.route('/')
         await req.authRepository.deleteUser({
             accessToken: req.accessToken,
         });
-        res.sendStatus(200);
+        res.sendStatus(204);
     })
 )
 
@@ -124,7 +124,7 @@ usersRouter.get('/photo/uploadurl',
 usersRouter.delete('/photo', 
     catchError(async (req: AuthApiRequest, res: Response) => {
         await req.authRepository.removeProfilePhoto(req.accessToken);
-        res.sendStatus(200);
+        res.sendStatus(204);
     })
 )
 

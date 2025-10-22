@@ -59,51 +59,61 @@ const PROD_ENV_RULES = Joi.object({
     DYNAMODB_REGION: Joi.string(),
 });
 
-let processed: boolean = false;
+let CACHED_ENV: Record<string,any> | undefined;
 
 export function configenv(): Record<string,any> {
-    if (!processed) {
-        let rules: ValidationRule | undefined;
-        switch(process.env.NODE_ENV) {
-            case "prod": rules = PROD_ENV_RULES;
-            break;
-            case "dev": rules = DEV_ENV_RULES;
-            break;
-            default: rules = undefined;
-        }
-        if (rules !== undefined) {
-            try {
-                const values = validate(rules, process.env);
-                process.env = {
-                    ...process.env,
-                    ...values,
-                };
-            }
-            catch(error) {
-                let apperror: AppError;
-                if (error instanceof AppError) {
-                    error.operational = false;
-                    error.code = APP_ERROR_CODE.INTERNAL_SERVER_ERROR;
-                    error.httpCode = 500;
-                    apperror = error;
-                }
-                else {
-                    apperror = newAppErrorBuilder()
-                                .setHttpCode(500)
-                                .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
-                                .setOperational(false)
-                                .addDetails({
-                                    description:"environment variable validation error",
-                                    reason: toErrorReason(error),
-                                })
-                                .build();
-                }
-                throw apperror;
-            }
-        }
-        processed = true;
+    if (CACHED_ENV) {
+        return CACHED_ENV!;
     }
-    return process.env as Record<string,any>;
+   
+    let rules: ValidationRule | undefined;
+    switch(process.env.NODE_ENV) {
+        case "prod": rules = PROD_ENV_RULES;
+        break;
+        case "dev": rules = DEV_ENV_RULES;
+        break;
+        default: rules = undefined;
+    }
+    if (rules !== undefined) {
+        try {
+            const values = validate(rules, process.env);
+            // in production, modifying process.env is not allowed in some environments (like AWS Lambda)
+            // therefore, we cache the validated env variables instead of modifying process.env directly
+            // process.env = {
+            //     ...process.env,
+            //     ...values,
+            // };
+            CACHED_ENV = {
+                ...process.env,
+                ...values
+            };
+        }
+        catch(error) {
+            let apperror: AppError;
+            if (error instanceof AppError) {
+                error.operational = false;
+                error.code = APP_ERROR_CODE.INTERNAL_SERVER_ERROR;
+                error.httpCode = 500;
+                apperror = error;
+            }
+            else {
+                apperror = newAppErrorBuilder()
+                            .setHttpCode(500)
+                            .setCode(APP_ERROR_CODE.INTERNAL_SERVER_ERROR)
+                            .setOperational(false)
+                            .addDetails({
+                                description:"environment variable validation error",
+                                reason: toErrorReason(error),
+                            })
+                            .build();
+            }
+            throw apperror;
+        }
+    }
+    else {
+        CACHED_ENV = process.env as Record<string,any>;
+    }
+    return CACHED_ENV!;
 }
 
 

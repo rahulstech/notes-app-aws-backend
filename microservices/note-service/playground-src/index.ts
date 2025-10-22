@@ -6,6 +6,9 @@ import { NoteObjectServiceFactoryImpl } from "@notes-app/storage-service";
 import { NoteQueueServiceFactoryImpl } from "@notes-app/queue-service";
 import serverless from "serverless-http";
 import { UserClaimExtractorProviderImpl } from "./middleware/UserClaimExtractorProvider";
+import { installUnexpectedErrorHandlers } from "@notes-app/common";
+
+installUnexpectedErrorHandlers();
 
 // build the app configuration
 const config: NoteExpressAppConfiguration = {
